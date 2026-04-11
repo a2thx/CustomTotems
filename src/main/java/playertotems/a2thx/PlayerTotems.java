@@ -172,6 +172,7 @@ public class PlayerTotems extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new OnCraftListener(), this);
         getServer().getPluginManager().registerEvents(new onWardenDeath(), this);
         getServer().getPluginManager().registerEvents(new InventoryListener(), this);
+        getServer().getPluginManager().registerEvents(new Research.ResearchGui.GuiListener(), this);
         getLogger().info("PlayerTotems has been enabled!");
         Recipes.register();
 
@@ -232,7 +233,8 @@ public class PlayerTotems extends JavaPlugin {
         public static class OpenResearchMenu implements CommandExecutor {
             @Override
             public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-                if (!(sender instanceof Player)) return false;
+                if (!(sender instanceof Player))
+                    return false;
                 Player player = (Player) sender;
                 Inventory inventory = Bukkit.createInventory(null, 27,
                         ChatColor.BLACK + "" + ChatColor.BOLD + "Research Tree");
@@ -241,49 +243,55 @@ public class PlayerTotems extends JavaPlugin {
                 ItemMeta tiersButtonMeta = TiersButton.getItemMeta();
                 tiersButtonMeta.setDisplayName(ChatColor.DARK_PURPLE + "Tiers");
                 TiersButton.setItemMeta(tiersButtonMeta);
+                ItemStack invisibility = Recipes.invisibilityPotion.clone();
+                ItemMeta invisMeta = invisibility.getItemMeta();
+                invisMeta.setDisplayName(ChatColor.GREEN + "Invisibility Tiers");
+                invisMeta.setLore(null);
+                invisMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+                invisibility.setItemMeta(invisMeta);
 
-                switch (onJoin.getPlayerFile(player).getFile().getInt("CurrentGlobalTier")) {
-                    case 0:
-                        for (int i = 0; i < 9; i++) {
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        }
-                        for (int i = 18; i < 27; i++) {
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        }
-                        break;
-                    case 1:
-                        for (int i = 0; i < 5; i++) {
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        }
-                        inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 6; i < 9; i++) {
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        }
-                        for (int i = 18; i < 22; i++) {
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        }
-                        inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 23; i < 27; i++) {
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        }
-                        break;
-                    case 2:
-                        for (int i = 0; i < 9; i++) {
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        }
-                        for (int i = 18; i < 27; i++) {
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        }
-                        break;
-                }
+                ItemStack speed = Recipes.speedPotion.clone();
+                ItemMeta speedMeta = speed.getItemMeta();
+                speedMeta.setDisplayName(ChatColor.GREEN + "Speed Tiers");
+                speedMeta.setLore(null);
+                speedMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+                speed.setItemMeta(speedMeta);
 
-                inventory.setItem(10, Recipes.invisibilityPotion);
-                inventory.setItem(11, Recipes.speedPotion);
-                inventory.setItem(12, Recipes.strengthPotion);
+                ItemStack strength = Recipes.strengthPotion.clone();
+                ItemMeta strengthMeta = strength.getItemMeta();
+                strengthMeta.setDisplayName(ChatColor.GREEN + "Strength Tiers");
+                strengthMeta.setLore(null);
+                strengthMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+                strength.setItemMeta(strengthMeta);
+
+                ItemStack health = Recipes.healthPotion.clone();
+                ItemMeta healthMeta = health.getItemMeta();
+                healthMeta.setDisplayName(ChatColor.GREEN + "Health Tiers");
+                healthMeta.setLore(null);
+                healthMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+                health.setItemMeta(healthMeta);
+
+                ItemStack haste = Recipes.hastePotion.clone();
+                ItemMeta hasteMeta = haste.getItemMeta();
+                hasteMeta.setDisplayName(ChatColor.GREEN + "Haste Tiers");
+                hasteMeta.setLore(null);
+                hasteMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+                haste.setItemMeta(hasteMeta);
+
+                ItemStack fireResistance = Recipes.fireResistancePotion.clone();
+                ItemMeta fireResMeta = fireResistance.getItemMeta();
+                fireResMeta.setDisplayName(ChatColor.GREEN + "Fire Resistance Tiers");
+                fireResMeta.setLore(null);
+                fireResMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+                fireResistance.setItemMeta(fireResMeta);
+
+                inventory.setItem(10, invisibility);
+                inventory.setItem(11, speed);
+                inventory.setItem(12, strength);
                 inventory.setItem(13, TiersButton);
-                inventory.setItem(14, Recipes.healthPotion);
-                inventory.setItem(15, Recipes.hastePotion);
-                inventory.setItem(16, Recipes.fireResistancePotion);
+                inventory.setItem(14, health);
+                inventory.setItem(15, haste);
+                inventory.setItem(16, fireResistance);
                 player.openInventory(inventory);
                 player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "research tree"));
                 return false;
@@ -365,6 +373,420 @@ public class PlayerTotems extends JavaPlugin {
             player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "tiers menu"));
         }
 
+        public static void openInvisibilityMenu(Player player) {
+            Inventory inventory = Bukkit.createInventory(null, 27,
+                    ChatColor.BLACK + "" + ChatColor.BOLD + "Invisibility research");
+            ItemStack icon = Recipes.invisibilityPotion.clone();
+            ItemMeta iconMeta = icon.getItemMeta();
+            iconMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+
+            switch (onJoin.getPlayerFile(player).getFile().getInt("CurrentGlobalTier")) {
+                case 0:
+                    for (int i = 0; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.RED + "Invisibility Tier 1");
+                    iconMeta.setLore(Arrays.asList("locked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Invisibility Tier 2");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Invisibility Tier 3");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+                case 1:
+                    for (int i = 0; i < 5; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                    for (int i = 6; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 22; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                    for (int i = 23; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Invisibility Tier 1");
+                    iconMeta.setLore(Arrays.asList("unlocked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.YELLOW + "Invisibility Tier 2");
+                    iconMeta.setLore(Arrays.asList("unlocking"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Invisibility Tier 3");
+                    iconMeta.setLore(Arrays.asList("locked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+                case 2:
+                    for (int i = 0; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Invisibility Tier 1");
+                    iconMeta.setLore(Arrays.asList("unlocked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Invisibility Tier 2");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Invisibility Tier 3");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+            }
+            player.openInventory(inventory);
+            player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "invisibility menu"));
+        }
+
+        public static void openSpeedMenu(Player player) {
+            Inventory inventory = Bukkit.createInventory(null, 27,
+                    ChatColor.BLACK + "" + ChatColor.BOLD + "Speed research");
+            ItemStack icon = Recipes.speedPotion.clone();
+            ItemMeta iconMeta = icon.getItemMeta();
+            iconMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+
+            switch (onJoin.getPlayerFile(player).getFile().getInt("CurrentGlobalTier")) {
+                case 0:
+                    for (int i = 0; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.RED + "Speed Tier 1");
+                    iconMeta.setLore(Arrays.asList("locked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Speed Tier 2");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Speed Tier 3");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+                case 1:
+                    for (int i = 0; i < 5; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                    for (int i = 6; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 22; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                    for (int i = 23; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Speed Tier 1");
+                    iconMeta.setLore(Arrays.asList("unlocked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.YELLOW + "Speed Tier 2");
+                    iconMeta.setLore(Arrays.asList("unlocking"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Speed Tier 3");
+                    iconMeta.setLore(Arrays.asList("locked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+                case 2:
+                    for (int i = 0; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Speed Tier 1");
+                    iconMeta.setLore(Arrays.asList("unlocked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Speed Tier 2");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Speed Tier 3");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+            }
+            player.openInventory(inventory);
+            player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "speed menu"));
+        }
+
+        public static void openStrengthMenu(Player player) {
+            Inventory inventory = Bukkit.createInventory(null, 27,
+                    ChatColor.BLACK + "" + ChatColor.BOLD + "Strength research");
+            ItemStack icon = Recipes.strengthPotion.clone();
+            ItemMeta iconMeta = icon.getItemMeta();
+            iconMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+
+            switch (onJoin.getPlayerFile(player).getFile().getInt("CurrentGlobalTier")) {
+                case 0:
+                    for (int i = 0; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.RED + "Strength Tier 1");
+                    iconMeta.setLore(Arrays.asList("locked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Strength Tier 2");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Strength Tier 3");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+                case 1:
+                    for (int i = 0; i < 5; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                    for (int i = 6; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 22; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                    for (int i = 23; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Strength Tier 1");
+                    iconMeta.setLore(Arrays.asList("unlocked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.YELLOW + "Strength Tier 2");
+                    iconMeta.setLore(Arrays.asList("unlocking"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Strength Tier 3");
+                    iconMeta.setLore(Arrays.asList("locked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+                case 2:
+                    for (int i = 0; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Strength Tier 1");
+                    iconMeta.setLore(Arrays.asList("unlocked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Strength Tier 2");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Strength Tier 3");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+            }
+            player.openInventory(inventory);
+            player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "strength menu"));
+        }
+
+        public static void openHealthMenu(Player player) {
+            Inventory inventory = Bukkit.createInventory(null, 27,
+                    ChatColor.BLACK + "" + ChatColor.BOLD + "Health research");
+            ItemStack icon = Recipes.healthPotion.clone();
+            ItemMeta iconMeta = icon.getItemMeta();
+            iconMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+
+            switch (onJoin.getPlayerFile(player).getFile().getInt("CurrentGlobalTier")) {
+                case 0:
+                    for (int i = 0; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.RED + "Health Tier 1");
+                    iconMeta.setLore(Arrays.asList("locked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Health Tier 2");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Health Tier 3");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+                case 1:
+                    for (int i = 0; i < 5; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                    for (int i = 6; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 22; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                    for (int i = 23; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Health Tier 1");
+                    iconMeta.setLore(Arrays.asList("unlocked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.YELLOW + "Health Tier 2");
+                    iconMeta.setLore(Arrays.asList("unlocking"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Health Tier 3");
+                    iconMeta.setLore(Arrays.asList("locked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+                case 2:
+                    for (int i = 0; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Health Tier 1");
+                    iconMeta.setLore(Arrays.asList("unlocked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Health Tier 2");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Health Tier 3");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+            }
+            player.openInventory(inventory);
+            player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "health menu"));
+        }
+
+        public static void openHasteMenu(Player player) {
+            Inventory inventory = Bukkit.createInventory(null, 27,
+                    ChatColor.BLACK + "" + ChatColor.BOLD + "Haste research");
+            ItemStack icon = Recipes.hastePotion.clone();
+            ItemMeta iconMeta = icon.getItemMeta();
+            iconMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+
+            switch (onJoin.getPlayerFile(player).getFile().getInt("CurrentGlobalTier")) {
+                case 0:
+                    for (int i = 0; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.RED + "Haste Tier 1");
+                    iconMeta.setLore(Arrays.asList("locked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Haste Tier 2");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Haste Tier 3");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+                case 1:
+                    for (int i = 0; i < 5; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                    for (int i = 6; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 22; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                    for (int i = 23; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Haste Tier 1");
+                    iconMeta.setLore(Arrays.asList("unlocked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.YELLOW + "Haste Tier 2");
+                    iconMeta.setLore(Arrays.asList("unlocking"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Haste Tier 3");
+                    iconMeta.setLore(Arrays.asList("locked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+                case 2:
+                    for (int i = 0; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Haste Tier 1");
+                    iconMeta.setLore(Arrays.asList("unlocked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Haste Tier 2");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Haste Tier 3");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+            }
+            player.openInventory(inventory);
+            player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "haste menu"));
+        }
+
+        public static void openFireResistanceMenu(Player player) {
+            Inventory inventory = Bukkit.createInventory(null, 27,
+                    ChatColor.BLACK + "" + ChatColor.BOLD + "Fire Resistance research");
+            ItemStack icon = Recipes.fireResistancePotion.clone();
+            ItemMeta iconMeta = icon.getItemMeta();
+            iconMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+
+            switch (onJoin.getPlayerFile(player).getFile().getInt("CurrentGlobalTier")) {
+                case 0:
+                    for (int i = 0; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.RED + "Fire Resistance Tier 1");
+                    iconMeta.setLore(Arrays.asList("locked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Fire Resistance Tier 2");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Fire Resistance Tier 3");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+                case 1:
+                    for (int i = 0; i < 5; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                    for (int i = 6; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 22; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                    for (int i = 23; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Fire Resistance Tier 1");
+                    iconMeta.setLore(Arrays.asList("unlocked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.YELLOW + "Fire Resistance Tier 2");
+                    iconMeta.setLore(Arrays.asList("unlocking"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.RED + "Fire Resistance Tier 3");
+                    iconMeta.setLore(Arrays.asList("locked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+                case 2:
+                    for (int i = 0; i < 9; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    for (int i = 18; i < 27; i++)
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Fire Resistance Tier 1");
+                    iconMeta.setLore(Arrays.asList("unlocked"));
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(10, icon);
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Fire Resistance Tier 2");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(13, icon);
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Fire Resistance Tier 3");
+                    icon.setItemMeta(iconMeta);
+                    inventory.setItem(16, icon);
+                    break;
+            }
+            player.openInventory(inventory);
+            player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "fire resistance menu"));
+        }
+
         public static class ResearchGui {
             public static class GuiListener implements Listener {
                 @EventHandler
@@ -373,23 +795,41 @@ public class PlayerTotems extends JavaPlugin {
                     if (player.hasMetadata("openedmenu")) {
                         e.setCancelled(true);
 
-                        switch (e.getSlot()) {
-                            case 1:
-                                break;
-                            case 7:
-                                break;
-                            case 11:
-                                break;
-                            case 13:
-                                openTiersMenu(player);
-                                break;
-                            case 15:
-                                break;
-                            case 19:
-                                break;
-                            case 25:
-                                break;
+                        String menu = player.getMetadata("openedmenu").get(0).asString();
+
+                        if (menu.equals("research tree")) {
+                            switch (e.getSlot()) {
+                                case 10:
+                                    openInvisibilityMenu(player);
+                                    break;
+                                case 11:
+                                    openSpeedMenu(player);
+                                    break;
+                                case 12:
+                                    openStrengthMenu(player);
+                                    break;
+                                case 13:
+                                    openTiersMenu(player);
+                                    break;
+                                case 14:
+                                    openHealthMenu(player);
+                                    break;
+                                case 15:
+                                    openHasteMenu(player);
+                                    break;
+                                case 16:
+                                    openFireResistanceMenu(player);
+                                    break;
+                            }
                         }
+                    }
+                }
+
+                @EventHandler
+                public void onDrag(InventoryDragEvent e) {
+                    Player player = (Player) e.getWhoClicked();
+                    if (player.hasMetadata("openedmenu")) {
+                        e.setCancelled(true);
                     }
                 }
 
