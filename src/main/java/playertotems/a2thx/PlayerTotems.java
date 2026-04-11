@@ -12,7 +12,9 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Warden;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -65,6 +67,9 @@ public class PlayerTotems extends JavaPlugin {
                 "FireResistanceTotemT3");
         public static final NamespacedKey HASTE_TOTEM_TIER3 = new NamespacedKey(PlayerTotems.getInstance(),
                 "HasteTotemT3");
+
+        public static final NamespacedKey HEART_OF_THE_WARDEN = new NamespacedKey(PlayerTotems.getInstance(),
+                "HeartOfTheWarden");
     }
 
     @Override
@@ -131,8 +136,31 @@ public class PlayerTotems extends JavaPlugin {
     }
 
     public final class Recipes {
+        public static ItemStack heartOfTheWarden;
+        public static ItemStack StrenghtTotem;
+        public static ItemStack HealthTotem;
+        public static ItemStack FireResistanceTotem;
+        public static ItemStack HasteTotem;
+        public static ItemStack StrenghtTotemT2;
+        public static ItemStack HealthTotemT2;
+        public static ItemStack FireResistanceTotemT2;
+        public static ItemStack HasteTotemT2;
+        public static ItemStack StrenghtTotemT3;
+        public static ItemStack HealthTotemT3;
+        public static ItemStack FireResistanceTotemT3;
+        public static ItemStack HasteTotemT3;
+
         public static void register() {
-            ItemStack StrenghtTotem = new ItemStack(Material.TOTEM_OF_UNDYING);
+            heartOfTheWarden = new ItemStack(Material.NETHER_STAR);
+            ItemMeta heartOfTheWardenMeta = heartOfTheWarden.getItemMeta();
+            heartOfTheWardenMeta.setDisplayName(ChatColor.DARK_PURPLE + "Heart of the Warden");
+            heartOfTheWardenMeta.getPersistentDataContainer().set(keys.HEART_OF_THE_WARDEN, PersistentDataType.STRING,
+                    "HeartOfTheWarden");
+            heartOfTheWardenMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+            heartOfTheWardenMeta.addEnchant(Enchantment.UNBREAKING, 1, true);
+            heartOfTheWarden.setItemMeta(heartOfTheWardenMeta);
+
+            StrenghtTotem = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta StrenghtTotemMeta = StrenghtTotem.getItemMeta();
             StrenghtTotemMeta.setDisplayName(ChatColor.YELLOW + "Strenght Totem");
             StrenghtTotemMeta.getPersistentDataContainer().set(keys.STRENGHT_TOTEM, PersistentDataType.STRING,
@@ -153,7 +181,7 @@ public class PlayerTotems extends JavaPlugin {
             fireResMeta.setBasePotionType(PotionType.FIRE_RESISTANCE);
             fireResistancePotion.setItemMeta(fireResMeta);
 
-            ItemStack HealthTotem = new ItemStack(Material.TOTEM_OF_UNDYING);
+            HealthTotem = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta HealthTotemMeta = HealthTotem.getItemMeta();
             HealthTotemMeta.setDisplayName(ChatColor.YELLOW + "Health Totem");
             HealthTotemMeta.getPersistentDataContainer().set(keys.HEALTH_TOTEM, PersistentDataType.STRING,
@@ -161,7 +189,7 @@ public class PlayerTotems extends JavaPlugin {
             HealthTotemMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
             HealthTotemMeta.addEnchant(Enchantment.UNBREAKING, 1, true);
             HealthTotem.setItemMeta(HealthTotemMeta);
-            ItemStack FireResistanceTotem = new ItemStack(Material.TOTEM_OF_UNDYING);
+            FireResistanceTotem = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta FireResistanceTotemMeta = FireResistanceTotem.getItemMeta();
             FireResistanceTotemMeta.setDisplayName(ChatColor.RED + "Fire Resistance Totem");
             FireResistanceTotemMeta.getPersistentDataContainer().set(keys.FIRE_RESISTANCE_TOTEM,
@@ -169,7 +197,7 @@ public class PlayerTotems extends JavaPlugin {
             FireResistanceTotemMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
             FireResistanceTotemMeta.addEnchant(Enchantment.UNBREAKING, 1, true);
             FireResistanceTotem.setItemMeta(FireResistanceTotemMeta);
-            ItemStack HasteTotem = new ItemStack(Material.TOTEM_OF_UNDYING);
+            HasteTotem = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta HasteTotemMeta = HasteTotem.getItemMeta();
             HasteTotemMeta.setDisplayName(ChatColor.YELLOW + "Haste Totem");
             HasteTotemMeta.getPersistentDataContainer().set(keys.HASTE_TOTEM, PersistentDataType.STRING, "HasteTotem");
@@ -177,7 +205,7 @@ public class PlayerTotems extends JavaPlugin {
             HasteTotemMeta.addEnchant(Enchantment.UNBREAKING, 1, true);
             HasteTotem.setItemMeta(HasteTotemMeta);
             // TIER 2
-            ItemStack StrenghtTotemT2 = new ItemStack(Material.TOTEM_OF_UNDYING);
+            StrenghtTotemT2 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta StrenghtTotemT2Meta = StrenghtTotemT2.getItemMeta();
             StrenghtTotemT2Meta.setDisplayName(ChatColor.YELLOW + "Strenght Totem T2");
             StrenghtTotemT2Meta.getPersistentDataContainer().set(keys.STRENGTH_TOTEM_TIER2, PersistentDataType.STRING,
@@ -186,7 +214,7 @@ public class PlayerTotems extends JavaPlugin {
             StrenghtTotemT2Meta.addEnchant(Enchantment.UNBREAKING, 1, true);
             StrenghtTotemT2.setItemMeta(StrenghtTotemT2Meta);
 
-            ItemStack HealthTotemT2 = new ItemStack(Material.TOTEM_OF_UNDYING);
+            HealthTotemT2 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta HealthTotemT2Meta = HealthTotemT2.getItemMeta();
             HealthTotemT2Meta.setDisplayName(ChatColor.YELLOW + "Health Totem T2");
             HealthTotemT2Meta.getPersistentDataContainer().set(keys.HEALTH_TOTEM_TIER2, PersistentDataType.STRING,
@@ -195,7 +223,7 @@ public class PlayerTotems extends JavaPlugin {
             HealthTotemT2Meta.addEnchant(Enchantment.UNBREAKING, 1, true);
             HealthTotemT2.setItemMeta(HealthTotemT2Meta);
 
-            ItemStack FireResistanceTotemT2 = new ItemStack(Material.TOTEM_OF_UNDYING);
+            FireResistanceTotemT2 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta FireResistanceTotemT2Meta = FireResistanceTotemT2.getItemMeta();
             FireResistanceTotemT2Meta.setDisplayName(ChatColor.YELLOW + "Fire Resistance Totem T2");
             FireResistanceTotemT2Meta.getPersistentDataContainer().set(keys.FIRE_RESISTANCE_TOTEM_TIER2,
@@ -204,7 +232,7 @@ public class PlayerTotems extends JavaPlugin {
             FireResistanceTotemT2Meta.addEnchant(Enchantment.UNBREAKING, 1, true);
             FireResistanceTotemT2.setItemMeta(FireResistanceTotemT2Meta);
 
-            ItemStack HasteTotemT2 = new ItemStack(Material.TOTEM_OF_UNDYING);
+            HasteTotemT2 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta HasteTotemT2Meta = HasteTotemT2.getItemMeta();
             HasteTotemT2Meta.setDisplayName(ChatColor.YELLOW + "Haste Totem T2");
             HasteTotemT2Meta.getPersistentDataContainer().set(keys.HASTE_TOTEM_TIER2, PersistentDataType.STRING,
@@ -213,7 +241,7 @@ public class PlayerTotems extends JavaPlugin {
             HasteTotemT2Meta.addEnchant(Enchantment.UNBREAKING, 1, true);
             HasteTotemT2.setItemMeta(HasteTotemT2Meta);
 
-            ItemStack StrenghtTotemT3 = new ItemStack(Material.TOTEM_OF_UNDYING);
+            StrenghtTotemT3 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta StrenghtTotemT3Meta = StrenghtTotemT3.getItemMeta();
             StrenghtTotemT3Meta.setDisplayName(ChatColor.YELLOW + "Strenght Totem T3");
             StrenghtTotemT3Meta.getPersistentDataContainer().set(keys.STRENGTH_TOTEM_TIER3, PersistentDataType.STRING,
@@ -222,7 +250,7 @@ public class PlayerTotems extends JavaPlugin {
             StrenghtTotemT3Meta.addEnchant(Enchantment.UNBREAKING, 1, true);
             StrenghtTotemT3.setItemMeta(StrenghtTotemT3Meta);
 
-            ItemStack HealthTotemT3 = new ItemStack(Material.TOTEM_OF_UNDYING);
+            HealthTotemT3 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta HealthTotemT3Meta = HealthTotemT3.getItemMeta();
             HealthTotemT3Meta.setDisplayName(ChatColor.YELLOW + "Health Totem T3");
             HealthTotemT3Meta.getPersistentDataContainer().set(keys.HEALTH_TOTEM_TIER3, PersistentDataType.STRING,
@@ -231,7 +259,7 @@ public class PlayerTotems extends JavaPlugin {
             HealthTotemT3Meta.addEnchant(Enchantment.UNBREAKING, 1, true);
             HealthTotemT3.setItemMeta(HealthTotemT3Meta);
 
-            ItemStack FireResistanceTotemT3 = new ItemStack(Material.TOTEM_OF_UNDYING);
+            FireResistanceTotemT3 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta FireResistanceTotemT3Meta = FireResistanceTotemT3.getItemMeta();
             FireResistanceTotemT3Meta.setDisplayName(ChatColor.YELLOW + "Fire Resistance Totem T3");
             FireResistanceTotemT3Meta.getPersistentDataContainer().set(keys.FIRE_RESISTANCE_TOTEM_TIER3,
@@ -240,7 +268,7 @@ public class PlayerTotems extends JavaPlugin {
             FireResistanceTotemT3Meta.addEnchant(Enchantment.UNBREAKING, 1, true);
             FireResistanceTotemT3.setItemMeta(FireResistanceTotemT3Meta);
 
-            ItemStack HasteTotemT3 = new ItemStack(Material.TOTEM_OF_UNDYING);
+            HasteTotemT3 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta HasteTotemT3Meta = HasteTotemT3.getItemMeta();
             HasteTotemT3Meta.setDisplayName(ChatColor.YELLOW + "Haste Totem T3");
             HasteTotemT3Meta.getPersistentDataContainer().set(keys.HASTE_TOTEM_TIER3, PersistentDataType.STRING,
@@ -312,15 +340,59 @@ public class PlayerTotems extends JavaPlugin {
             HasteTotemT2Recipe.setIngredient('N', Material.NETHERITE_INGOT);
             HasteTotemT2Recipe.setIngredient('P', Material.GOLD_BLOCK);
 
+            // Tier 3 recipies
+            ShapedRecipe HealthTotemT3Recipe = new ShapedRecipe(keys.HEALTH_TOTEM_TIER3, HealthTotemT3);
+            ShapedRecipe StrenghtTotemT3Recipe = new ShapedRecipe(keys.STRENGTH_TOTEM_TIER3, StrenghtTotemT3);
+            ShapedRecipe FireResistanceTotemT3Recipe = new ShapedRecipe(keys.FIRE_RESISTANCE_TOTEM_TIER3,
+                    FireResistanceTotemT3);
+            ShapedRecipe HasteTotemT3Recipe = new ShapedRecipe(keys.HASTE_TOTEM_TIER3, HasteTotemT3);
+
+            HealthTotemT3Recipe.shape(" S ",
+                    "NTN",
+                    " P ");
+            HealthTotemT3Recipe.setIngredient('T', new RecipeChoice.ExactChoice(HealthTotemT2));
+            HealthTotemT3Recipe.setIngredient('N', Material.NETHERITE_INGOT);
+            HealthTotemT3Recipe.setIngredient('S', new RecipeChoice.ExactChoice(heartOfTheWarden));
+            HealthTotemT3Recipe.setIngredient('P', new RecipeChoice.ExactChoice(healthPotion));
+
+            StrenghtTotemT3Recipe.shape(" S ",
+                    "NTN",
+                    " H ");
+            StrenghtTotemT3Recipe.setIngredient('T', new RecipeChoice.ExactChoice(StrenghtTotemT2));
+            StrenghtTotemT3Recipe.setIngredient('N', Material.NETHERITE_INGOT);
+            StrenghtTotemT3Recipe.setIngredient('S', new RecipeChoice.ExactChoice(heartOfTheWarden));
+            StrenghtTotemT3Recipe.setIngredient('H', new RecipeChoice.ExactChoice(heartOfTheWarden));
+
+            FireResistanceTotemT3Recipe.shape(" S ",
+                    "NTN",
+                    " M ");
+            FireResistanceTotemT3Recipe.setIngredient('T', new RecipeChoice.ExactChoice(FireResistanceTotemT2));
+            FireResistanceTotemT3Recipe.setIngredient('N', Material.NETHERITE_INGOT);
+            FireResistanceTotemT3Recipe.setIngredient('S', new RecipeChoice.ExactChoice(heartOfTheWarden));
+            FireResistanceTotemT3Recipe.setIngredient('M', Material.MAGMA_CREAM);
+
+            HasteTotemT3Recipe.shape(" S ",
+                    "NTN",
+                    " G ");
+            HasteTotemT3Recipe.setIngredient('T', new RecipeChoice.ExactChoice(HasteTotemT2));
+            HasteTotemT3Recipe.setIngredient('N', Material.NETHERITE_INGOT);
+            HasteTotemT3Recipe.setIngredient('S', new RecipeChoice.ExactChoice(heartOfTheWarden));
+            HasteTotemT3Recipe.setIngredient('G', Material.GOLD_BLOCK);
+            // T1
             Bukkit.addRecipe(HealthTotemT2Recipe);
             Bukkit.addRecipe(StrenghtTotemT2Recipe);
             Bukkit.addRecipe(FireResistanceTotemT2Recipe);
             Bukkit.addRecipe(HasteTotemT2Recipe);
-
+            // T2
             Bukkit.addRecipe(HealthTotemRecipe);
             Bukkit.addRecipe(StrenghtTotemRecipe);
             Bukkit.addRecipe(FireResistanceTotemRecipe);
             Bukkit.addRecipe(HasteTotemRecipe);
+            // T3
+            Bukkit.addRecipe(HealthTotemT3Recipe);
+            Bukkit.addRecipe(StrenghtTotemT3Recipe);
+            Bukkit.addRecipe(FireResistanceTotemT3Recipe);
+            Bukkit.addRecipe(HasteTotemT3Recipe);
         }
     }
 
@@ -355,6 +427,15 @@ public class PlayerTotems extends JavaPlugin {
                 if (isSpecialItem(contents[i])) {
                     victum.getInventory().setItem(i, null);
                 }
+            }
+        }
+    }
+
+    public class onWardenDeath implements Listener {
+        @EventHandler
+        public void onWardenDeath(EntityDeathEvent e) {
+            if (e.getEntity() instanceof Warden) {
+                e.getDrops().add(Recipes.heartOfTheWarden);
             }
         }
     }
@@ -569,6 +650,7 @@ public class PlayerTotems extends JavaPlugin {
                 meta.getPersistentDataContainer().has(keys.HEALTH_TOTEM, PersistentDataType.STRING) ||
                 meta.getPersistentDataContainer().has(keys.STRENGHT_TOTEM, PersistentDataType.STRING) ||
                 meta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM, PersistentDataType.STRING) ||
-                meta.getPersistentDataContainer().has(keys.HASTE_TOTEM, PersistentDataType.STRING);
+                meta.getPersistentDataContainer().has(keys.HASTE_TOTEM, PersistentDataType.STRING) ||
+                meta.getPersistentDataContainer().has(keys.HEART_OF_THE_WARDEN, PersistentDataType.STRING);
     }
 }
