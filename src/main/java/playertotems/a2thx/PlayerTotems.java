@@ -232,9 +232,7 @@ public class PlayerTotems extends JavaPlugin {
         public static class OpenResearchMenu implements CommandExecutor {
             @Override
             public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-                if (sender instanceof Player) {
-                    Player player = (Player) sender;
-                }
+                if (!(sender instanceof Player)) return false;
                 Player player = (Player) sender;
                 Inventory inventory = Bukkit.createInventory(null, 27,
                         ChatColor.BLACK + "" + ChatColor.BOLD + "Research Tree");
@@ -244,13 +242,48 @@ public class PlayerTotems extends JavaPlugin {
                 tiersButtonMeta.setDisplayName(ChatColor.DARK_PURPLE + "Tiers");
                 TiersButton.setItemMeta(tiersButtonMeta);
 
-                inventory.setItem(1, Recipes.invisibilityPotion);
-                inventory.setItem(7, Recipes.speedPotion);
-                inventory.setItem(11, Recipes.strengthPotion);
+                switch (onJoin.getPlayerFile(player).getFile().getInt("CurrentGlobalTier")) {
+                    case 0:
+                        for (int i = 0; i < 9; i++) {
+                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                        }
+                        for (int i = 18; i < 27; i++) {
+                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                        }
+                        break;
+                    case 1:
+                        for (int i = 0; i < 5; i++) {
+                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                        }
+                        inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                        for (int i = 6; i < 9; i++) {
+                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                        }
+                        for (int i = 18; i < 22; i++) {
+                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                        }
+                        inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                        for (int i = 23; i < 27; i++) {
+                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                        }
+                        break;
+                    case 2:
+                        for (int i = 0; i < 9; i++) {
+                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                        }
+                        for (int i = 18; i < 27; i++) {
+                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                        }
+                        break;
+                }
+
+                inventory.setItem(10, Recipes.invisibilityPotion);
+                inventory.setItem(11, Recipes.speedPotion);
+                inventory.setItem(12, Recipes.strengthPotion);
                 inventory.setItem(13, TiersButton);
-                inventory.setItem(15, Recipes.healthPotion);
-                inventory.setItem(19, Recipes.hastePotion);
-                inventory.setItem(25, Recipes.fireResistancePotion);
+                inventory.setItem(14, Recipes.healthPotion);
+                inventory.setItem(15, Recipes.hastePotion);
+                inventory.setItem(16, Recipes.fireResistancePotion);
                 player.openInventory(inventory);
                 player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "research tree"));
                 return false;
@@ -263,9 +296,71 @@ public class PlayerTotems extends JavaPlugin {
             ItemStack tiers = new ItemStack(Material.HEAVY_CORE);
             ItemMeta tiersMeta = tiers.getItemMeta();
             tiersMeta.setDisplayName(ChatColor.GREEN + "Tier 1");
-            tiersMeta.setLore(Arrays.asList(ChatColor.RED + "locked"));
+            tiersMeta.setLore(Arrays.asList("unlocked"));
+            tiers.setItemMeta(tiersMeta);
+            switch (onJoin.getPlayerFile(player).getFile().getInt("CurrentGlobalTier")) {
+                case 0:
+                    for (int i = 0; i < 9; i++) {
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    }
+                    tiersMeta.setDisplayName(ChatColor.RED + "Tier 1");
+                    tiersMeta.setLore(Arrays.asList("locked"));
+                    tiers.setItemMeta(tiersMeta);
+                    inventory.setItem(11, tiers);
+                    tiersMeta.setDisplayName(ChatColor.RED + "Tier 2");
+                    tiersMeta.setLore(Arrays.asList("locked"));
+                    tiers.setItemMeta(tiersMeta);
+                    inventory.setItem(14, tiers);
+                    tiersMeta.setDisplayName(ChatColor.RED + "Tier 3");
+                    tiersMeta.setLore(Arrays.asList("locked"));
+                    tiers.setItemMeta(tiersMeta);
+                    inventory.setItem(17, tiers);
+                    for (int i = 18; i < 27; i++) {
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    }
+                    break;
 
-            inventory.setItem(11, new ItemStack());
+                case 1:
+                    for (int i = 0; i < 5; i++) {
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    }
+                    inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                    for (int i = 6; i < 9; i++) {
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    }
+                    inventory.setItem(11, tiers);
+                    tiersMeta.setDisplayName(ChatColor.YELLOW + "Tier 2");
+                    tiersMeta.setLore(Arrays.asList("unlocking"));
+                    tiers.setItemMeta(tiersMeta);
+                    inventory.setItem(14, tiers);
+                    tiersMeta.setDisplayName(ChatColor.RED + "Tier 3");
+                    tiersMeta.setLore(Arrays.asList("locked"));
+                    tiers.setItemMeta(tiersMeta);
+                    inventory.setItem(17, tiers);
+                    for (int i = 18; i < 22; i++) {
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    }
+                    inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+                    for (int i = 23; i < 27; i++) {
+                        inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
+                    }
+                    break;
+                case 2:
+                    for (int i = 0; i < 9; i++) {
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    }
+                    inventory.setItem(11, tiers);
+                    tiersMeta.setDisplayName(ChatColor.GREEN + "Tier 2");
+                    tiers.setItemMeta(tiersMeta);
+                    inventory.setItem(14, tiers);
+                    tiersMeta.setDisplayName(ChatColor.GREEN + "Tier 3");
+                    tiers.setItemMeta(tiersMeta);
+                    inventory.setItem(17, tiers);
+                    for (int i = 18; i < 27; i++) {
+                        inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
+                    }
+                    break;
+            }
             player.openInventory(inventory);
             player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "tiers menu"));
         }
