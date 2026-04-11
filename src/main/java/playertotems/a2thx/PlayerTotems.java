@@ -1,6 +1,9 @@
 package playertotems.a2thx;
 
 import org.bukkit.event.Listener;
+
+import java.io.File;
+import java.util.Arrays;
 import java.util.List;
 
 import org.bukkit.Bukkit;
@@ -10,7 +13,10 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.enchantments.Enchantment;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Warden;
 import org.bukkit.event.EventHandler;
@@ -18,8 +24,10 @@ import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.inventory.InventoryAction;
@@ -33,6 +41,7 @@ import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.inventory.meta.SkullMeta;
+import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -72,6 +81,85 @@ public class PlayerTotems extends JavaPlugin {
                 "HeartOfTheWarden");
     }
 
+    public class onJoin implements Listener {
+        @EventHandler
+        public void onJoin(PlayerJoinEvent event) {
+            Player player = event.getPlayer();
+            Files playerfile = new Files("playerdata/" + player.getName().toLowerCase() + ".yml");
+            playerfile.addDefault("CurrentGlobalTier", 0);
+            playerfile.addDefault("TotemTiers/StrenghtTier", 0);
+            playerfile.addDefault("TotemTiers/HealthTier", 0);
+            playerfile.addDefault("TotemTiers/FireResistanceTier", 0);
+            playerfile.addDefault("TotemTiers/HasteTier", 0);
+            playerfile.save();
+        }
+
+        public static Files getPlayerFile(Player player) {
+            Files playerfile = new Files("playerdata/" + player.getName().toLowerCase() + ".yml");
+            return playerfile;
+        }
+    }
+
+    public static class Files {
+        private final static PlayerTotems instance = PlayerTotems.getInstance();
+        private File file;
+        private FileConfiguration config;
+        private String filename;
+
+        public Files(String filename) {
+            this.filename = filename;
+            this.load();
+        }
+
+        private void load() {
+            this.file = new File(instance.getDataFolder(), this.filename);
+
+            if (!instance.getDataFolder().exists()) {
+                instance.getDataFolder().mkdirs();
+            }
+
+            if (!this.file.exists()) {
+                try {
+                    this.file.getParentFile().mkdirs();
+
+                    if (instance.getResource(this.filename) != null) {
+                        instance.saveResource(this.filename, false);
+                    } else {
+                        this.file.createNewFile();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                this.config = YamlConfiguration.loadConfiguration(this.file);
+                this.config.options().parseComments(true);
+                this.config.options().copyDefaults(true);
+            }
+
+            this.config = YamlConfiguration.loadConfiguration(this.file);
+            this.config.options().parseComments(true);
+        }
+
+        public void set(String path, Object value) {
+            this.config.set(path, value);
+        }
+
+        public void addDefault(String path, Object value) {
+            this.config.addDefault(path, value);
+        }
+
+        public FileConfiguration getFile() {
+            return this.config;
+        }
+
+        public void save() {
+            try {
+                this.config.save(this.file);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     @Override
     public void onEnable() {
         saveDefaultConfig();
@@ -79,8 +167,10 @@ public class PlayerTotems extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new OnDropListener(), this);
         getCommand("gethead").setExecutor(new getHead());
         getCommand("destroy").setExecutor(new Destroy());
+        getCommand("research").setExecutor(new Research.OpenResearchMenu());
         getServer().getPluginManager().registerEvents(new OnPlace(), this);
         getServer().getPluginManager().registerEvents(new OnCraftListener(), this);
+        getServer().getPluginManager().registerEvents(new onWardenDeath(), this);
         getServer().getPluginManager().registerEvents(new InventoryListener(), this);
         getLogger().info("PlayerTotems has been enabled!");
         Recipes.register();
@@ -135,7 +225,97 @@ public class PlayerTotems extends JavaPlugin {
         return getPlugin(PlayerTotems.class);
     }
 
+    // Research Tree
+    public static class Research {
+        public static ItemStack TiersButton;
+
+        public static class OpenResearchMenu implements CommandExecutor {
+            @Override
+            public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+                if (sender instanceof Player) {
+                    Player player = (Player) sender;
+                }
+                Player player = (Player) sender;
+                Inventory inventory = Bukkit.createInventory(null, 27,
+                        ChatColor.BLACK + "" + ChatColor.BOLD + "Research Tree");
+
+                TiersButton = new ItemStack(Material.HEAVY_CORE);
+                ItemMeta tiersButtonMeta = TiersButton.getItemMeta();
+                tiersButtonMeta.setDisplayName(ChatColor.DARK_PURPLE + "Tiers");
+                TiersButton.setItemMeta(tiersButtonMeta);
+
+                inventory.setItem(1, Recipes.invisibilityPotion);
+                inventory.setItem(7, Recipes.speedPotion);
+                inventory.setItem(11, Recipes.strengthPotion);
+                inventory.setItem(13, TiersButton);
+                inventory.setItem(15, Recipes.healthPotion);
+                inventory.setItem(19, Recipes.hastePotion);
+                inventory.setItem(25, Recipes.fireResistancePotion);
+                player.openInventory(inventory);
+                player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "research tree"));
+                return false;
+            }
+        }
+
+        public static void openTiersMenu(Player player) {
+            Inventory inventory = Bukkit.createInventory(null, 27,
+                    ChatColor.BLACK + "" + ChatColor.BOLD + "Tiers");
+            ItemStack tiers = new ItemStack(Material.HEAVY_CORE);
+            ItemMeta tiersMeta = tiers.getItemMeta();
+            tiersMeta.setDisplayName(ChatColor.GREEN + "Tier 1");
+            tiersMeta.setLore(Arrays.asList(ChatColor.RED + "locked"));
+
+            inventory.setItem(11, new ItemStack());
+            player.openInventory(inventory);
+            player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "tiers menu"));
+        }
+
+        public static class ResearchGui {
+            public static class GuiListener implements Listener {
+                @EventHandler
+                public void onClick(InventoryClickEvent e) {
+                    Player player = (Player) e.getWhoClicked();
+                    if (player.hasMetadata("openedmenu")) {
+                        e.setCancelled(true);
+
+                        switch (e.getSlot()) {
+                            case 1:
+                                break;
+                            case 7:
+                                break;
+                            case 11:
+                                break;
+                            case 13:
+                                openTiersMenu(player);
+                                break;
+                            case 15:
+                                break;
+                            case 19:
+                                break;
+                            case 25:
+                                break;
+                        }
+                    }
+                }
+
+                @EventHandler
+                public void onClose(InventoryCloseEvent e) {
+                    Player player = (Player) e.getPlayer();
+                    if (player.hasMetadata("openedmenu")) {
+                        player.removeMetadata("openedmenu", getInstance());
+                    }
+                }
+            }
+        }
+    }
+
     public final class Recipes {
+        public static ItemStack invisibilityPotion;
+        public static ItemStack speedPotion;
+        public static ItemStack strengthPotion;
+        public static ItemStack healthPotion;
+        public static ItemStack fireResistancePotion;
+        public static ItemStack hastePotion;
         public static ItemStack heartOfTheWarden;
         public static ItemStack StrenghtTotem;
         public static ItemStack HealthTotem;
@@ -159,6 +339,21 @@ public class PlayerTotems extends JavaPlugin {
             heartOfTheWardenMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
             heartOfTheWardenMeta.addEnchant(Enchantment.UNBREAKING, 1, true);
             heartOfTheWarden.setItemMeta(heartOfTheWardenMeta);
+            // Potions
+            invisibilityPotion = new ItemStack(Material.POTION, 1);
+            PotionMeta invisibilityMeta = (PotionMeta) invisibilityPotion.getItemMeta();
+            invisibilityMeta.setBasePotionType(PotionType.INVISIBILITY);
+            invisibilityPotion.setItemMeta(invisibilityMeta);
+            speedPotion = new ItemStack(Material.POTION, 1);
+            PotionMeta speedMeta = (PotionMeta) speedPotion.getItemMeta();
+            speedMeta.setBasePotionType(PotionType.SWIFTNESS);
+            speedPotion.setItemMeta(speedMeta);
+            hastePotion = new ItemStack(Material.POTION, 1);
+            PotionMeta hasteMeta = (PotionMeta) hastePotion.getItemMeta();
+            hasteMeta.setBasePotionType(PotionType.LEAPING);
+            hasteMeta.setCustomName("Haste Potion");
+            hasteMeta.setDisplayName("Haste Potion");
+            hastePotion.setItemMeta(hasteMeta);
 
             StrenghtTotem = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta StrenghtTotemMeta = StrenghtTotem.getItemMeta();
@@ -168,15 +363,15 @@ public class PlayerTotems extends JavaPlugin {
             StrenghtTotemMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
             StrenghtTotemMeta.addEnchant(Enchantment.UNBREAKING, 1, true);
             StrenghtTotem.setItemMeta(StrenghtTotemMeta);
-            ItemStack healthPotion = new ItemStack(Material.POTION, 1);
+            healthPotion = new ItemStack(Material.POTION, 1);
             PotionMeta healthMeta = (PotionMeta) healthPotion.getItemMeta();
             healthMeta.setBasePotionType(PotionType.HEALING);
             healthPotion.setItemMeta(healthMeta);
-            ItemStack strengthPotion = new ItemStack(Material.POTION, 1);
+            strengthPotion = new ItemStack(Material.POTION, 1);
             PotionMeta strengthMeta = (PotionMeta) strengthPotion.getItemMeta();
             strengthMeta.setBasePotionType(PotionType.STRENGTH);
             strengthPotion.setItemMeta(strengthMeta);
-            ItemStack fireResistancePotion = new ItemStack(Material.POTION, 1);
+            fireResistancePotion = new ItemStack(Material.POTION, 1);
             PotionMeta fireResMeta = (PotionMeta) fireResistancePotion.getItemMeta();
             fireResMeta.setBasePotionType(PotionType.FIRE_RESISTANCE);
             fireResistancePotion.setItemMeta(fireResMeta);

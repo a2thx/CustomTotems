@@ -7,4 +7,4 @@ commands:
   gethead:
     permission: playertotems.gethead
   destroy:
- 
+  research:
