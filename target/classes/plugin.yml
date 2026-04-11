@@ -1,0 +1,10 @@
+main: playertotems.a2thx.PlayerTotems
+version: 1.0.0
+name: PlayerTotems
+author: a2thx
+api-version: 1.13
+commands:
+  gethead:
+    permission: playertotems.gethead
+  destroy:
+ 
