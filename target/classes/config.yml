@@ -1,4 +1,57 @@
 itemmeta:
   playerhead:
     lore: "The head will be destroyed on death or when its taken out of your inventory"
+research:
+  tier1:
+    global:
+      xp:
+      playtime: 90 #in minutes
+  strength:
+    tier1:
+      xp:
+      playtime: 90 #in minutes
+  health:
+    tier1:
+      xp:
+      playtime: 90 #in minutes
+  fireresistance:
+    tier1:
+      xp:
+      playtime: 120 #in minutes
+  haste:
+    tier1:
+      xp:
+      playtime: 150 #in minutes
+  tier2:
+    global:
+      xp:
+      playtime: 240 #in minutes
+    strength:
+      xp:
+      playtime: 240 #in minutes
+    health:
+      xp:
+      playtime: 260 #in minutes
+    fireresistance:
+      xp:
+      playtime: 260 #in minutes
+    haste:
+      xp:
+      playtime: 280 #in minutes
+  tier3:
+    global:
+      xp:
+      playtime: 300 #in minutes
+    strength:
+      xp:
+      playtime: 300 #in minutes
+    health:
+      xp:
+      playtime: 300 #in minutes
+    fireresistance:
+      xp:
+      playtime: 300 #in minutes
+    haste:
+      xp:
+      playtime: 300 #in minutes
     
