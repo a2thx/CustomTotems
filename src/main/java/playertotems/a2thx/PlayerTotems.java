@@ -212,21 +212,21 @@ public class PlayerTotems extends JavaPlugin {
                                     new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 200, 0, true, false, true));
                         }
                     }
-                    if (hasHealthTotem) {
+                    if (player.getPersistentDataContainer().get(
+                            new NamespacedKey(getInstance(), "healthtier3active"), PersistentDataType.BOOLEAN)) {
+                        player.getAttribute(Attribute.MAX_HEALTH)
+                                .setBaseValue(getInstance().getConfig().getInt("research.tier3.health.maxhealth"));
+                    } else if (player.getPersistentDataContainer().get(
+                            new NamespacedKey(getInstance(), "healthtier2active"), PersistentDataType.BOOLEAN)) {
+                        player.getAttribute(Attribute.MAX_HEALTH)
+                                .setBaseValue(getInstance().getConfig().getInt("research.tier2.health.maxhealth"));
+                    } else if (hasHealthTotem) {
                         player.getAttribute(Attribute.MAX_HEALTH)
                                 .setBaseValue(getInstance().getConfig().getInt("research.tier1.health.maxhealth"));
                     } else {
-                        if (player.getPersistentDataContainer().get(
-                                new NamespacedKey(getInstance(), "healthtier3active"), PersistentDataType.BOOLEAN)) {
-                            player.getAttribute(Attribute.MAX_HEALTH)
-                                    .setBaseValue(getInstance().getConfig().getInt("research.tier3.health.maxhealth"));
-                        } else if (player.getPersistentDataContainer().get(
-                                new NamespacedKey(getInstance(), "healthtier2active"), PersistentDataType.BOOLEAN)) {
-                            player.getAttribute(Attribute.MAX_HEALTH)
-                                    .setBaseValue(getInstance().getConfig().getInt("research.tier2.health.maxhealth"));
-                        }
                         player.getAttribute(Attribute.MAX_HEALTH).setBaseValue(20.0);
                     }
+
                     if (hasteCount > 0) {
                         int amplifier = hasteCount >= 2 ? 1 : 0;
                         player.addPotionEffect(new PotionEffect(PotionEffectType.HASTE, 200, amplifier, true,
