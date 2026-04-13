@@ -1,15 +1,14 @@
 package playertotems.a2thx;
 
 import org.bukkit.event.Listener;
-
 import java.io.File;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-
 import org.bukkit.Bukkit;
+import org.bukkit.Effect;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
@@ -55,9 +54,10 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.potion.PotionType;
 import org.bukkit.scheduler.BukkitRunnable;
-
 import net.md_5.bungee.api.ChatColor;
 
+// TASK FOR NEXT TIME: AT LINE 222. Add a persistant data container data that stores if the player has a health totem active 
+//done
 public class PlayerTotems extends JavaPlugin {
     public class keys {
         public static final NamespacedKey STRENGHT_TOTEM = new NamespacedKey(PlayerTotems.getInstance(),
@@ -83,7 +83,6 @@ public class PlayerTotems extends JavaPlugin {
                 "FireResistanceTotemT3");
         public static final NamespacedKey HASTE_TOTEM_TIER3 = new NamespacedKey(PlayerTotems.getInstance(),
                 "HasteTotemT3");
-
         public static final NamespacedKey HEART_OF_THE_WARDEN = new NamespacedKey(PlayerTotems.getInstance(),
                 "HeartOfTheWarden");
     }
@@ -212,13 +211,20 @@ public class PlayerTotems extends JavaPlugin {
                             player.addPotionEffect(
                                     new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 200, 0, true, false, true));
                         }
-                        if (meta.getPersistentDataContainer().has(keys.HASTE_TOTEM, PersistentDataType.STRING)) {
-                            hasteCount++;
-                        }
                     }
                     if (hasHealthTotem) {
-                        player.getAttribute(Attribute.MAX_HEALTH).setBaseValue(24.0);
+                        player.getAttribute(Attribute.MAX_HEALTH)
+                                .setBaseValue(getInstance().getConfig().getInt("research.tier1.health.maxhealth"));
                     } else {
+                        if (player.getPersistentDataContainer().get(
+                                new NamespacedKey(getInstance(), "healthtier3active"), PersistentDataType.BOOLEAN)) {
+                            player.getAttribute(Attribute.MAX_HEALTH)
+                                    .setBaseValue(getInstance().getConfig().getInt("research.tier3.health.maxhealth"));
+                        } else if (player.getPersistentDataContainer().get(
+                                new NamespacedKey(getInstance(), "healthtier2active"), PersistentDataType.BOOLEAN)) {
+                            player.getAttribute(Attribute.MAX_HEALTH)
+                                    .setBaseValue(getInstance().getConfig().getInt("research.tier2.health.maxhealth"));
+                        }
                         player.getAttribute(Attribute.MAX_HEALTH).setBaseValue(20.0);
                     }
                     if (hasteCount > 0) {
@@ -292,7 +298,6 @@ public class PlayerTotems extends JavaPlugin {
     // Research Tree
     public static class Research {
         public static ItemStack TiersButton;
-
         public static Set<UUID> bypassPlayers = new HashSet<>();
 
         public static int getPlayedMinutes(Player player) {
@@ -1355,9 +1360,6 @@ public class PlayerTotems extends JavaPlugin {
 
             ItemMeta resultMeta = result.getItemMeta();
             Player player = (Player) e.getViewers().get(0);
-
-            // Workaround for Spigot's shape recipe matcher prioritizing identical base
-            // materials incorrectly
             ItemStack[] matrix = e.getInventory().getMatrix();
             boolean hasT1Strength = false, hasT1Health = false, hasT1Fire = false, hasT1Haste = false;
             boolean hasT2Strength = false, hasT2Health = false, hasT2Fire = false, hasT2Haste = false;
@@ -1765,6 +1767,27 @@ public class PlayerTotems extends JavaPlugin {
     }
 
     public static class OnItemUse implements Listener {
+
+        private void applyEffect(Player player, PotionEffectType effect, int durationTicks, int amplifier,
+                ItemStack item) {
+            player.addPotionEffect(new PotionEffect(effect, durationTicks, amplifier, true, true));
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    if (player.isDead()) {
+                        this.cancel();
+                        return;
+                    }
+                    if (player.isOnline()) {
+                        if (!player.getInventory().contains(item)) {
+                            player.removePotionEffect(effect);
+                            this.cancel();
+                        }
+                    }
+                }
+            }.runTaskTimer(PlayerTotems.getInstance(), 0, 40);
+        }
+
         @EventHandler
         public void onUse(PlayerInteractEvent e) {
             if (e.getItem() == null)
@@ -1783,23 +1806,96 @@ public class PlayerTotems extends JavaPlugin {
             } else if (meta.getPersistentDataContainer().has(keys.HASTE_TOTEM, PersistentDataType.STRING)) {
                 e.setCancelled(true);
             } else if (meta.getPersistentDataContainer().has(keys.HEALTH_TOTEM_TIER2, PersistentDataType.STRING)) {
+                player.getPersistentDataContainer().set(
+                        new NamespacedKey(PlayerTotems.getInstance(), "healthtier2active"), PersistentDataType.BOOLEAN,
+                        true);
+                new BukkitRunnable() {
+                    int timesran = 0;
 
+                    @Override
+                    public void run() {
+                        if (player.isDead()) {
+                            this.cancel();
+                            return;
+                        }
+                        timesran++;
+                        if (timesran == PlayerTotems.getInstance().getConfig()
+                                .getInt("research.tier2.health.timeactive") * 60) {
+                            player.getPersistentDataContainer().set(
+                                    new NamespacedKey(PlayerTotems.getInstance(), "healthtier2active"),
+                                    PersistentDataType.BOOLEAN, false);
+                            this.cancel();
+                        }
+                        if (player.isOnline()) {
+                            if (!player.getInventory().contains(item)) {
+                                player.getPersistentDataContainer().set(
+                                        new NamespacedKey(PlayerTotems.getInstance(), "healthtier2active"),
+                                        PersistentDataType.BOOLEAN, false);
+                                this.cancel();
+                            }
+                        }
+                    }
+                }.runTaskTimer(PlayerTotems.getInstance(), 0, 20);
             } else if (meta.getPersistentDataContainer().has(keys.STRENGTH_TOTEM_TIER2, PersistentDataType.STRING)) {
-
+                applyEffect(player, PotionEffectType.STRENGTH,
+                        PlayerTotems.getInstance().getConfig().getInt("research.tier2.strength.timeactive") * 20 * 60,
+                        0, item);
             } else if (meta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM_TIER2,
                     PersistentDataType.STRING)) {
+                applyEffect(player, PotionEffectType.FIRE_RESISTANCE,
+                        PlayerTotems.getInstance().getConfig().getInt("research.tier2.fireresistance.timeactive") * 20
+                                * 60,
+                        0, item);
 
             } else if (meta.getPersistentDataContainer().has(keys.HASTE_TOTEM_TIER2, PersistentDataType.STRING)) {
-
+                applyEffect(player, PotionEffectType.HASTE,
+                        PlayerTotems.getInstance().getConfig().getInt("research.tier2.haste.timeactive") * 20 * 60,
+                        0, item);
             } else if (meta.getPersistentDataContainer().has(keys.HEALTH_TOTEM_TIER3, PersistentDataType.STRING)) {
+                player.getPersistentDataContainer().set(
+                        new NamespacedKey(PlayerTotems.getInstance(), "healthtier3active"), PersistentDataType.BOOLEAN,
+                        true);
+                new BukkitRunnable() {
+                    int timesran = 0;
 
+                    @Override
+                    public void run() {
+                        if (player.isDead()) {
+                            this.cancel();
+                            return;
+                        }
+                        timesran++;
+                        if (timesran == PlayerTotems.getInstance().getConfig()
+                                .getInt("research.tier3.health.timeactive") * 60) {
+                            player.getPersistentDataContainer().set(
+                                    new NamespacedKey(PlayerTotems.getInstance(), "healthtier3active"),
+                                    PersistentDataType.BOOLEAN, false);
+                            this.cancel();
+                        }
+                        if (player.isOnline()) {
+                            if (!player.getInventory().contains(item)) {
+                                player.getPersistentDataContainer().set(
+                                        new NamespacedKey(PlayerTotems.getInstance(), "healthtier3active"),
+                                        PersistentDataType.BOOLEAN, false);
+                                this.cancel();
+                            }
+                        }
+                    }
+                }.runTaskTimer(PlayerTotems.getInstance(), 0, 20);
             } else if (meta.getPersistentDataContainer().has(keys.STRENGTH_TOTEM_TIER3, PersistentDataType.STRING)) {
-
+                applyEffect(player, PotionEffectType.STRENGTH,
+                        PlayerTotems.getInstance().getConfig().getInt("research.tier3.strength.timeactive") * 20 * 60,
+                        0, item);
             } else if (meta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM_TIER3,
                     PersistentDataType.STRING)) {
-
+                applyEffect(player, PotionEffectType.FIRE_RESISTANCE,
+                        PlayerTotems.getInstance().getConfig().getInt("research.tier3.fireresistance.timeactive") * 20
+                                * 60,
+                        0, item);
             } else if (meta.getPersistentDataContainer().has(keys.HASTE_TOTEM_TIER3, PersistentDataType.STRING)) {
-
+                applyEffect(player, PotionEffectType.HASTE,
+                        PlayerTotems.getInstance().getConfig().getInt("research.tier3.haste.timeactive") * 20 * 60,
+                        0, item);
             }
         }
     }
@@ -1809,18 +1905,14 @@ public class PlayerTotems extends JavaPlugin {
         public void onTotemUse(EntityResurrectEvent e) {
             if (!(e.getEntity() instanceof Player player))
                 return;
-
             ItemStack main = player.getInventory().getItemInMainHand();
             ItemStack off = player.getInventory().getItemInOffHand();
-
             ItemStack item = null;
-
             if (main != null && main.getType() == Material.TOTEM_OF_UNDYING && PlayerTotems.isSpecialItem(main)) {
                 item = main;
             } else if (off != null && off.getType() == Material.TOTEM_OF_UNDYING && PlayerTotems.isSpecialItem(off)) {
                 item = off;
             }
-
             if (item == null)
                 return;
         }

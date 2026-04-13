@@ -9,6 +9,7 @@ research:
     health:
       playtime: 90
       xp: 5
+      maxhealth: 24
     fireresistance:
       playtime: 120
       xp: 5
@@ -33,6 +34,7 @@ research:
       playtime: 260
       xp: 10
       timeactive: 10
+      maxhealth: 30
     fireresistance:
       playtime: 260
       xp: 10
@@ -62,6 +64,7 @@ research:
       playtime: 300
       xp: 15
       timeactive: 15
+      maxhealth: 34
     fireresistance:
       playtime: 300
       xp: 15
