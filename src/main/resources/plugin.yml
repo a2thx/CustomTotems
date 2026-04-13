@@ -8,3 +8,5 @@ commands:
     permission: playertotems.gethead
   destroy:
   research:
+  bypasstime:
+    permission: playertotems.bypasstime

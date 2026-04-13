@@ -1,57 +1,102 @@
-itemmeta:
-  playerhead:
-    lore: "The head will be destroyed on death or when its taken out of your inventory"
 research:
   tier1:
     global:
-      xp:
-      playtime: 90 #in minutes
-  strength:
-    tier1:
-      xp:
-      playtime: 90 #in minutes
-  health:
-    tier1:
-      xp:
-      playtime: 90 #in minutes
-  fireresistance:
-    tier1:
-      xp:
-      playtime: 120 #in minutes
-  haste:
-    tier1:
-      xp:
-      playtime: 150 #in minutes
+      playtime: 90 #minutes
+      xp: 10 #Levels
+    strength:
+      playtime: 90
+      xp: 5
+    health:
+      playtime: 90
+      xp: 5
+    fireresistance:
+      playtime: 120
+      xp: 5
+    haste:
+      playtime: 150
+      xp: 5
+    speed:
+      playtime: 90
+      xp: 5
+    invisibility:
+      playtime: 90
+      xp: 5
   tier2:
     global:
-      xp:
-      playtime: 240 #in minutes
+      playtime: 240
+      xp: 20
     strength:
-      xp:
-      playtime: 240 #in minutes
+      playtime: 240
+      xp: 10
+      timeactive: 10 #in minutes
     health:
-      xp:
-      playtime: 260 #in minutes
+      playtime: 260
+      xp: 10
+      timeactive: 10
     fireresistance:
-      xp:
-      playtime: 260 #in minutes
+      playtime: 260
+      xp: 10
+      timeactive: 10
     haste:
-      xp:
-      playtime: 240 #in minutes
+      playtime: 240
+      xp: 10
+      timeactive: 10
+    speed:
+      playtime: 240
+      xp: 10
+      timeactive: 10
+    invisibility:
+      playtime: 240
+      xp: 10
+      timeactive: 10
   tier3:
     global:
-      xp:
-      playtime: 300 #in minutes
+      playtime: 300
+      xp: 40
+      timeactive: 15
     strength:
-      xp:
-      playtime: 300 #in minutes
+      playtime: 300
+      xp: 15
+      timeactive: 15
     health:
-      xp:
-      playtime: 300 #in minutes
+      playtime: 300
+      xp: 15
+      timeactive: 15
     fireresistance:
-      xp:
-      playtime: 300 #in minutes
+      playtime: 300
+      xp: 15
+      timeactive: 15
     haste:
-      xp:
-      playtime: 300 #in minutes
-    
+      playtime: 300
+      xp: 15
+      timeactive: 15
+    speed:
+      playtime: 300
+      xp: 15
+      timeactive: 15
+    invisibility:
+      playtime: 300
+      xp: 15
+      timeactive: 15
+
+totem-colors:
+  strength: WHITE
+  health: RED
+  fireresistance: RED
+  haste: GOLD
+  speed: AQUA
+  invisibility: WHITE
+
+potion-settings:
+  strength:
+    enabled: true
+  health:
+    enabled: true
+  fireresistance:
+    enabled: true
+  haste:
+    enabled: true
+  speed:
+    enabled: false
+  invisibility:
+    enabled: false

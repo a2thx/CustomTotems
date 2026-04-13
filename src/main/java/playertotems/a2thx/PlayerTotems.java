@@ -4,7 +4,10 @@ import org.bukkit.event.Listener;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -23,6 +26,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.entity.Warden;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityResurrectEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -44,6 +48,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.metadata.FixedMetadataValue;
+import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -81,6 +86,11 @@ public class PlayerTotems extends JavaPlugin {
 
         public static final NamespacedKey HEART_OF_THE_WARDEN = new NamespacedKey(PlayerTotems.getInstance(),
                 "HeartOfTheWarden");
+    }
+
+    public boolean isPotionEnabled(String type) {
+        String cleanType = type.toLowerCase().replace(" ", "").replace("strenght", "strength");
+        return getConfig().getBoolean("potion-settings." + cleanType + ".enabled", true);
     }
 
     public class onJoin implements Listener {
@@ -165,11 +175,13 @@ public class PlayerTotems extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        reloadConfig();
         getServer().getPluginManager().registerEvents(new OnDeathListener(), this);
         getServer().getPluginManager().registerEvents(new OnDropListener(), this);
         getCommand("gethead").setExecutor(new getHead());
         getCommand("destroy").setExecutor(new Destroy());
         getCommand("research").setExecutor(new Research.OpenResearchMenu());
+        getCommand("bypasstime").setExecutor(new BypassTime());
         getServer().getPluginManager().registerEvents(new OnPlace(), this);
         getServer().getPluginManager().registerEvents(new OnCraftListener(), this);
         getServer().getPluginManager().registerEvents(new onWardenDeath(), this);
@@ -228,124 +240,128 @@ public class PlayerTotems extends JavaPlugin {
         return getPlugin(PlayerTotems.class);
     }
 
+    public static class tier2totems {
+        public static ItemStack T2strengthtotem;
+        public static ItemStack T2healthtotem;
+        public static ItemStack T2fireresistancetotem;
+        public static ItemStack T2hastetotem;
+
+        public static void register() {
+            T2strengthtotem = new ItemStack(Material.TOTEM_OF_UNDYING);
+            T2healthtotem = new ItemStack(Material.TOTEM_OF_UNDYING);
+            T2fireresistancetotem = new ItemStack(Material.TOTEM_OF_UNDYING);
+            T2hastetotem = new ItemStack(Material.TOTEM_OF_UNDYING);
+
+            ItemMeta strengthmeta = T2strengthtotem.getItemMeta();
+            ItemMeta healthmeta = T2healthtotem.getItemMeta();
+            ItemMeta fireresistancemeta = T2fireresistancetotem.getItemMeta();
+            ItemMeta hastemeta = T2hastetotem.getItemMeta();
+
+            strengthmeta.setDisplayName(getInstance().getTotemColor("strength") + "Tier 2 Strength Totem");
+            healthmeta.setDisplayName(getInstance().getTotemColor("health") + "Tier 2 Health Totem");
+            fireresistancemeta
+                    .setDisplayName(getInstance().getTotemColor("fire resistance") + "Tier 2 Fire Resistance Totem");
+            hastemeta.setDisplayName(getInstance().getTotemColor("haste") + "Tier 2 Haste Totem");
+
+            strengthmeta.getPersistentDataContainer().set(keys.STRENGTH_TOTEM_TIER2, PersistentDataType.STRING,
+                    "StrengthTotemT2");
+            healthmeta.getPersistentDataContainer().set(keys.HEALTH_TOTEM_TIER2, PersistentDataType.STRING,
+                    "HealthTotemT2");
+            fireresistancemeta.getPersistentDataContainer().set(keys.FIRE_RESISTANCE_TOTEM_TIER2,
+                    PersistentDataType.STRING, "FireResistanceTotemT2");
+            hastemeta.getPersistentDataContainer().set(keys.HASTE_TOTEM_TIER2, PersistentDataType.STRING,
+                    "HasteTotemT2");
+
+            T2strengthtotem.setItemMeta(strengthmeta);
+            T2healthtotem.setItemMeta(healthmeta);
+            T2fireresistancetotem.setItemMeta(fireresistancemeta);
+            T2hastetotem.setItemMeta(hastemeta);
+        }
+    }
+
+    public ChatColor getTotemColor(String type) {
+        String cleanType = type.toLowerCase().replace(" ", "").replace("strenght", "strength");
+        String colorName = getConfig().getString("totem-colors." + cleanType, "WHITE");
+        try {
+            return ChatColor.valueOf(colorName.toUpperCase());
+        } catch (Exception e) {
+            return ChatColor.WHITE;
+        }
+    }
+
     // Research Tree
     public static class Research {
         public static ItemStack TiersButton;
+
+        public static Set<UUID> bypassPlayers = new HashSet<>();
 
         public static int getPlayedMinutes(Player player) {
             return player.getStatistic(Statistic.PLAY_ONE_MINUTE) / 20 / 60;
         }
 
         public static boolean canResearch(Player player, String type, int tier) {
+            boolean isBypassing = bypassPlayers.contains(player.getUniqueId());
+
+            String path;
+            if (type.equalsIgnoreCase("global")) {
+                path = "research.tier" + tier + ".global";
+            } else {
+                path = "research.tier" + tier + "." + type.toLowerCase().replace(" ", "");
+            }
+
+            int reqMinutes = PlayerTotems.getInstance().getConfig().getInt(path + ".playtime", 0);
+            int reqXP = PlayerTotems.getInstance().getConfig().getInt(path + ".xp", 0);
+
+            boolean hasTime = isBypassing || getPlayedMinutes(player) >= reqMinutes;
+            boolean hasXP = player.getLevel() >= reqXP;
+
+            return hasTime && hasXP;
+        }
+
+        public static int getRequiredXP(String type, int tier) {
+            String path;
+            if (type.equalsIgnoreCase("global")) {
+                path = "research.tier" + tier + ".global.xp";
+            } else {
+                path = "research.tier" + tier + "." + type.toLowerCase().replace(" ", "") + ".xp";
+            }
+            return PlayerTotems.getInstance().getConfig().getInt(path);
+        }
+
+        public static int getRequiredMinutes(String type, int tier) {
+            String path;
+            if (type.equalsIgnoreCase("global")) {
+                path = "research.tier" + tier + ".global.playtime";
+            } else {
+                path = "research.tier" + tier + "." + type.toLowerCase().replace(" ", "") + ".playtime";
+            }
+            return PlayerTotems.getInstance().getConfig().getInt(path);
+        }
+
+        public static String getTotemTierPath(Player player, String type) {
+            type = type.toLowerCase().replace(" ", "");
             switch (type) {
-                case "global":
-                    if (onJoin.getPlayerFile(player).getFile().getInt("CurrentGlobalTier") >= tier)
-                        switch (tier) {
-                            case 1:
-                                return getPlayedMinutes(player) >= PlayerTotems.getInstance().getConfig()
-                                        .getInt("research.tier1.global.playtime");
-                            case 2:
-                                return getPlayedMinutes(player) >= PlayerTotems.getInstance().getConfig()
-                                        .getInt("research.tier2.global.playtime");
-                            case 3:
-                                return getPlayedMinutes(player) >= PlayerTotems.getInstance().getConfig()
-                                        .getInt("research.tier3.global.playtime");
-                            default:
-                                return false;
-                        }
-                    else
-                        return false;
                 case "strength":
-                    if (onJoin.getPlayerFile(player).getFile().getInt("CurrentStrengthTier") >= tier)
-                        switch (tier) {
-                            case 1:
-                                return getPlayedMinutes(player) >= PlayerTotems.getInstance().getConfig()
-                                        .getInt("research.tier1.strength.playtime");
-                            case 2:
-                                return getPlayedMinutes(player) >= PlayerTotems.getInstance().getConfig()
-                                        .getInt("research.tier2.strength.playtime");
-                            case 3:
-                                return getPlayedMinutes(player) >= PlayerTotems.getInstance().getConfig()
-                                        .getInt("research.tier3.strength.playtime");
-                            default:
-                                break;
-                        }
-                    else
-                        return false;
-                case "haste":
-                    if (onJoin.getPlayerFile(player).getFile().getInt("CurrentHasteTier") >= tier)
-                        switch (tier) {
-                            case 1:
-                                return getPlayedMinutes(player) >= PlayerTotems.getInstance().getConfig()
-                                        .getInt("research.tier1.haste.playtime");
-                            case 2:
-                                return getPlayedMinutes(player) >= PlayerTotems.getInstance().getConfig()
-                                        .getInt("research.tier2.haste.playtime");
-                            case 3:
-                                return getPlayedMinutes(player) >= PlayerTotems.getInstance().getConfig()
-                                        .getInt("research.tier3.haste.playtime");
-                            default:
-                                break;
-                        }
-                    else
-                        return false;
+                case "strenght":
+                    return "TotemTiers/StrenghtTier";
                 case "health":
-                    if (onJoin.getPlayerFile(player).getFile().getInt("CurrentHealthTier") >= tier)
-                        switch (tier) {
-                            case 1:
-                                return getPlayedMinutes(player) >= PlayerTotems.getInstance().getConfig()
-                                        .getInt("research.tier1.health.playtime");
-                            case 2:
-                                return getPlayedMinutes(player) >= PlayerTotems.getInstance().getConfig()
-                                        .getInt("research.tier2.health.playtime");
-                            case 3:
-                                return getPlayedMinutes(player) >= PlayerTotems.getInstance().getConfig()
-                                        .getInt("research.tier3.health.playtime");
-                            default:
-                                break;
-                        }
-                    else
-                        return false;
+                    return "TotemTiers/HealthTier";
                 case "fireresistance":
-                    if (onJoin.getPlayerFile(player).getFile().getInt("CurrentFireResistanceTier") >= tier) {
-                        switch (tier) {
-                            case 1:
-                                return getPlayedMinutes(player) >= PlayerTotems.getInstance().getConfig()
-                                        .getInt("research.tier1.fireresistance.playtime");
-                            case 2:
-                                return getPlayedMinutes(player) >= PlayerTotems.getInstance().getConfig()
-                                        .getInt("research.tier2.fireresistance.playtime");
-                            case 3:
-                                return getPlayedMinutes(player) >= PlayerTotems.getInstance().getConfig()
-                                        .getInt("research.tier3.fireresistance.playtime");
-                            default:
-                                break;
-                        }
-                    }
+                    return "TotemTiers/FireResistanceTier";
+                case "haste":
+                    return "TotemTiers/HasteTier";
+                case "invisibility":
+                    return "TotemTiers/InvisibilityTier";
+                case "speed":
+                    return "TotemTiers/SpeedTier";
                 default:
-                    player.sendMessage(ChatColor.RED
-                            + "Error at line 233 to 246 in the PlayerTotems plugin. Unknown type: " + type);
-                    return false;
+                    return "CurrentGlobalTier";
             }
         }
 
         public static int getTier(Player player, String type) {
-            switch (type) {
-                case "global":
-                    return onJoin.getPlayerFile(player).getFile().getInt("CurrentGlobalTier");
-                case "strength":
-                    return onJoin.getPlayerFile(player).getFile().getInt("CurrentStrengthTier");
-                case "haste":
-                    return onJoin.getPlayerFile(player).getFile().getInt("CurrentHasteTier");
-                case "health":
-                    return onJoin.getPlayerFile(player).getFile().getInt("CurrentHealthTier");
-                case "fireresistance":
-                    return onJoin.getPlayerFile(player).getFile().getInt("CurrentFireResistanceTier");
-                default:
-                    player.sendMessage(ChatColor.RED
-                            + "Error at line 233 to 246 in the PlayerTotems plugin. Unknown type: " + type);
-                    return -1;
-            }
+            FileConfiguration config = onJoin.getPlayerFile(player).getFile();
+            return config.getInt(getTotemTierPath(player, type));
         }
 
         public static class OpenResearchMenu implements CommandExecutor {
@@ -364,42 +380,66 @@ public class PlayerTotems extends JavaPlugin {
                 ItemStack invisibility = Recipes.invisibilityPotion.clone();
                 ItemMeta invisMeta = invisibility.getItemMeta();
                 invisMeta.setDisplayName(ChatColor.GREEN + "Invisibility Tiers");
-                invisMeta.setLore(null);
+                if (!getInstance().getConfig().getBoolean("potion-settings.invisibility.enabled", true)) {
+                    invisMeta.setLore(Arrays.asList(ChatColor.RED + "Coming soon!"));
+                } else {
+                    invisMeta.setLore(null);
+                }
                 invisMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
                 invisibility.setItemMeta(invisMeta);
 
                 ItemStack speed = Recipes.speedPotion.clone();
                 ItemMeta speedMeta = speed.getItemMeta();
                 speedMeta.setDisplayName(ChatColor.GREEN + "Speed Tiers");
-                speedMeta.setLore(null);
+                if (!getInstance().getConfig().getBoolean("potion-settings.speed.enabled", true)) {
+                    speedMeta.setLore(Arrays.asList(ChatColor.RED + "Coming soon!"));
+                } else {
+                    speedMeta.setLore(null);
+                }
                 speedMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
                 speed.setItemMeta(speedMeta);
 
-                ItemStack strength = Recipes.strengthPotion.clone();
+                ItemStack strength = Recipes.strengthDisplay.clone();
                 ItemMeta strengthMeta = strength.getItemMeta();
                 strengthMeta.setDisplayName(ChatColor.GREEN + "Strength Tiers");
-                strengthMeta.setLore(null);
+                if (!getInstance().isPotionEnabled("strength")) {
+                    strengthMeta.setLore(Arrays.asList(ChatColor.RED + "Coming soon!"));
+                } else {
+                    strengthMeta.setLore(null);
+                }
                 strengthMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
                 strength.setItemMeta(strengthMeta);
 
-                ItemStack health = Recipes.healthPotion.clone();
+                ItemStack health = Recipes.healthDisplay.clone();
                 ItemMeta healthMeta = health.getItemMeta();
                 healthMeta.setDisplayName(ChatColor.GREEN + "Health Tiers");
-                healthMeta.setLore(null);
+                if (!getInstance().isPotionEnabled("health")) {
+                    healthMeta.setLore(Arrays.asList(ChatColor.RED + "Coming soon!"));
+                } else {
+                    healthMeta.setLore(null);
+                }
                 healthMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
                 health.setItemMeta(healthMeta);
 
-                ItemStack haste = Recipes.hastePotion.clone();
+                ItemStack haste = Recipes.hasteDisplay.clone();
                 ItemMeta hasteMeta = haste.getItemMeta();
                 hasteMeta.setDisplayName(ChatColor.GREEN + "Haste Tiers");
-                hasteMeta.setLore(null);
+                if (!getInstance().isPotionEnabled("haste")) {
+                    hasteMeta.setLore(Arrays.asList(ChatColor.RED + "Coming soon!"));
+                } else {
+                    hasteMeta.setLore(null);
+                }
                 hasteMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
                 haste.setItemMeta(hasteMeta);
 
-                ItemStack fireResistance = Recipes.fireResistancePotion.clone();
+                ItemStack fireResistance = Recipes.fireResDisplay.clone();
                 ItemMeta fireResMeta = fireResistance.getItemMeta();
                 fireResMeta.setDisplayName(ChatColor.GREEN + "Fire Resistance Tiers");
-                fireResMeta.setLore(null);
+                if (!getInstance().isPotionEnabled("fire resistance")) {
+                    fireResMeta.setLore(Arrays.asList(ChatColor.RED + "Coming soon!"));
+                } else {
+                    fireResMeta.setLore(null);
+                }
                 fireResMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
                 fireResistance.setItemMeta(fireResMeta);
 
@@ -417,493 +457,263 @@ public class PlayerTotems extends JavaPlugin {
         }
 
         public static class PotionMenus {
+            private static void openGenericPotionMenu(Player player, String type, ItemStack baseIcon, String title) {
+                Inventory inventory = Bukkit.createInventory(null, 27, ChatColor.BLACK + "" + ChatColor.BOLD + title);
+
+                int current = getTier(player, type);
+                int global = getTier(player, "global");
+                boolean isEnabled = getInstance().isPotionEnabled(type);
+
+                ItemStack lockedGlass = new ItemStack(Material.RED_STAINED_GLASS_PANE);
+                ItemStack unlockingGlass = new ItemStack(Material.YELLOW_STAINED_GLASS_PANE);
+                ItemStack unlockedGlass = new ItemStack(Material.LIME_STAINED_GLASS_PANE);
+
+                // Background
+                Material bgMaterial = Material.RED_STAINED_GLASS_PANE;
+                if (current >= 2)
+                    bgMaterial = Material.LIME_STAINED_GLASS_PANE;
+
+                for (int i = 0; i < 9; i++)
+                    inventory.setItem(i, new ItemStack(bgMaterial));
+                for (int i = 18; i < 27; i++)
+                    inventory.setItem(i, new ItemStack(bgMaterial));
+
+                if (current == 1) {
+                    for (int i = 0; i < 4; i++)
+                        inventory.setItem(i, unlockedGlass);
+                    inventory.setItem(4, unlockingGlass);
+                    for (int i = 18; i < 22; i++)
+                        inventory.setItem(i, unlockedGlass);
+                    inventory.setItem(22, unlockingGlass);
+                }
+
+                if (current == 2) {
+                    // Top row
+                    for (int i = 0; i < 7; i++)
+                        inventory.setItem(i, unlockedGlass);
+                    inventory.setItem(7, unlockingGlass);
+                    inventory.setItem(8, unlockingGlass);
+                    // Bottom row
+                    for (int i = 18; i < 25; i++)
+                        inventory.setItem(i, unlockedGlass);
+                    inventory.setItem(25, unlockingGlass);
+                    inventory.setItem(26, unlockingGlass);
+                }
+
+                if (current == 3) {
+                    for (int i = 0; i < 9; i++)
+                        inventory.setItem(i, unlockedGlass);
+                    for (int i = 18; i < 27; i++)
+                        inventory.setItem(i, unlockedGlass);
+                }
+
+                String displayType = type.substring(0, 1).toUpperCase() + type.substring(1);
+
+                // Tier 1 (Slot 10)
+                ItemStack icon1 = baseIcon.clone();
+                ItemMeta meta1 = icon1.getItemMeta();
+                if (!isEnabled) {
+                    meta1.setDisplayName(ChatColor.RED + displayType + " Tier 1");
+                    meta1.setLore(Arrays.asList(ChatColor.RED + "Coming soon!"));
+                } else if (current >= 1) {
+                    meta1.setDisplayName(ChatColor.GREEN + displayType + " Tier 1");
+                    meta1.setLore(Arrays.asList(ChatColor.GRAY + "Unlocked"));
+                } else if (global >= 1 && canResearch(player, type, 1)) {
+                    meta1.setDisplayName(ChatColor.YELLOW + displayType + " Tier 1");
+                    meta1.setLore(Arrays.asList(ChatColor.YELLOW + "Click to unlock!",
+                            ChatColor.GRAY + "Cost: " + getRequiredXP(type, 1) + " levels"));
+                } else {
+                    meta1.setDisplayName(ChatColor.RED + displayType + " Tier 1");
+                    String req = global < 1 ? "Requires Global Tier 1"
+                            : "Requires " + getRequiredMinutes(type, 1) + "m playtime & " + getRequiredXP(type, 1)
+                                    + " levels";
+                    meta1.setLore(Arrays.asList(ChatColor.RED + "LOCKED", ChatColor.GRAY + req));
+                }
+                meta1.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+                icon1.setItemMeta(meta1);
+                inventory.setItem(10, icon1);
+
+                // Tier 2 (Slot 13)
+                ItemStack icon2 = baseIcon.clone();
+                ItemMeta meta2 = icon2.getItemMeta();
+                if (!isEnabled) {
+                    meta2.setDisplayName(ChatColor.RED + displayType + " Tier 2");
+                    meta2.setLore(Arrays.asList(ChatColor.RED + "Coming soon!"));
+                } else if (current >= 2) {
+                    meta2.setDisplayName(ChatColor.GREEN + displayType + " Tier 2");
+                    meta2.setLore(Arrays.asList(ChatColor.GRAY + "Unlocked"));
+                } else if (current == 1 && global >= 2 && canResearch(player, type, 2)) {
+                    meta2.setDisplayName(ChatColor.YELLOW + displayType + " Tier 2");
+                    meta2.setLore(Arrays.asList(ChatColor.YELLOW + "Click to unlock!",
+                            ChatColor.GRAY + "Cost: " + getRequiredXP(type, 2) + " levels"));
+                } else {
+                    meta2.setDisplayName(ChatColor.RED + displayType + " Tier 2");
+                    String req = current < 1 ? "Requires Tier 1"
+                            : (global < 2 ? "Requires Global Tier 2"
+                                    : "Requires " + getRequiredMinutes(type, 2) + "m playtime & "
+                                            + getRequiredXP(type, 2) + " levels");
+                    meta2.setLore(Arrays.asList(ChatColor.RED + "LOCKED", ChatColor.GRAY + req));
+                }
+                meta2.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+                icon2.setItemMeta(meta2);
+                inventory.setItem(13, icon2);
+
+                // Tier 3 (Slot 16)
+                ItemStack icon3 = baseIcon.clone();
+                ItemMeta meta3 = icon3.getItemMeta();
+                if (!isEnabled) {
+                    meta3.setDisplayName(ChatColor.RED + displayType + " Tier 3");
+                    meta3.setLore(Arrays.asList(ChatColor.RED + "Coming soon!"));
+                } else if (current >= 3) {
+                    meta3.setDisplayName(ChatColor.GREEN + displayType + " Tier 3");
+                    meta3.setLore(Arrays.asList(ChatColor.GRAY + "Unlocked"));
+                } else if (current == 2 && global >= 3 && canResearch(player, type, 3)) {
+                    meta3.setDisplayName(ChatColor.YELLOW + displayType + " Tier 3");
+                    meta3.setLore(Arrays.asList(ChatColor.YELLOW + "Click to unlock!",
+                            ChatColor.GRAY + "Cost: " + getRequiredXP(type, 3) + " levels"));
+                } else {
+                    meta3.setDisplayName(ChatColor.RED + displayType + " Tier 3");
+                    String req = current < 2 ? "Requires Tier 2"
+                            : (global < 3 ? "Requires Global Tier 3"
+                                    : "Requires " + getRequiredMinutes(type, 3) + "m playtime & "
+                                            + getRequiredXP(type, 3) + " levels");
+                    meta3.setLore(Arrays.asList(ChatColor.RED + "LOCKED", ChatColor.GRAY + req));
+                }
+                meta3.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+                icon3.setItemMeta(meta3);
+                inventory.setItem(16, icon3);
+
+                player.openInventory(inventory);
+                player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), type.toLowerCase() + " menu"));
+            }
+
             public static void openTiersMenu(Player player) {
                 Inventory inventory = Bukkit.createInventory(null, 27,
-                        ChatColor.BLACK + "" + ChatColor.BOLD + "Tiers");
-                ItemStack tiers = new ItemStack(Material.HEAVY_CORE);
-                ItemMeta tiersMeta = tiers.getItemMeta();
-                tiersMeta.setDisplayName(ChatColor.GREEN + "Tier 1");
-                tiersMeta.setLore(Arrays.asList("unlocked"));
-                tiers.setItemMeta(tiersMeta);
-                switch (onJoin.getPlayerFile(player).getFile().getInt("CurrentGlobalTier")) {
-                    case 0:
-                        for (int i = 0; i < 9; i++) {
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        }
-                        tiersMeta.setDisplayName(ChatColor.RED + "Tier 1");
-                        tiersMeta.setLore(Arrays.asList("locked"));
-                        tiers.setItemMeta(tiersMeta);
-                        inventory.setItem(11, tiers);
-                        tiersMeta.setDisplayName(ChatColor.RED + "Tier 2");
-                        tiersMeta.setLore(Arrays.asList("locked"));
-                        tiers.setItemMeta(tiersMeta);
-                        inventory.setItem(14, tiers);
-                        tiersMeta.setDisplayName(ChatColor.RED + "Tier 3");
-                        tiersMeta.setLore(Arrays.asList("locked"));
-                        tiers.setItemMeta(tiersMeta);
-                        inventory.setItem(17, tiers);
-                        for (int i = 18; i < 27; i++) {
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        }
-                        break;
+                        ChatColor.BLACK + "" + ChatColor.BOLD + "Research Tiers");
 
-                    case 1:
-                        for (int i = 0; i < 5; i++) {
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        }
-                        inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 6; i < 9; i++) {
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        }
-                        inventory.setItem(11, tiers);
-                        tiersMeta.setDisplayName(ChatColor.YELLOW + "Tier 2");
-                        tiersMeta.setLore(Arrays.asList("unlocking"));
-                        tiers.setItemMeta(tiersMeta);
-                        inventory.setItem(14, tiers);
-                        tiersMeta.setDisplayName(ChatColor.RED + "Tier 3");
-                        tiersMeta.setLore(Arrays.asList("locked"));
-                        tiers.setItemMeta(tiersMeta);
-                        inventory.setItem(17, tiers);
-                        for (int i = 18; i < 22; i++) {
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        }
-                        inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 23; i < 27; i++) {
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        }
-                        break;
-                    case 2:
-                        for (int i = 0; i < 9; i++) {
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        }
-                        inventory.setItem(11, tiers);
-                        tiersMeta.setDisplayName(ChatColor.GREEN + "Tier 2");
-                        tiers.setItemMeta(tiersMeta);
-                        inventory.setItem(14, tiers);
-                        tiersMeta.setDisplayName(ChatColor.GREEN + "Tier 3");
-                        tiers.setItemMeta(tiersMeta);
-                        inventory.setItem(17, tiers);
-                        for (int i = 18; i < 27; i++) {
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        }
-                        break;
+                ItemStack lockedGlass = new ItemStack(Material.RED_STAINED_GLASS_PANE);
+                ItemStack unlockingGlass = new ItemStack(Material.YELLOW_STAINED_GLASS_PANE);
+                ItemStack unlockedGlass = new ItemStack(Material.LIME_STAINED_GLASS_PANE);
+
+                int currentTier = getTier(player, "global");
+                Material bgMaterial = Material.RED_STAINED_GLASS_PANE;
+                if (currentTier >= 2)
+                    bgMaterial = Material.LIME_STAINED_GLASS_PANE;
+
+                for (int i = 0; i < 9; i++)
+                    inventory.setItem(i, new ItemStack(bgMaterial));
+                for (int i = 18; i < 27; i++)
+                    inventory.setItem(i, new ItemStack(bgMaterial));
+
+                if (currentTier == 1) {
+                    for (int i = 0; i < 4; i++)
+                        inventory.setItem(i, unlockedGlass);
+                    inventory.setItem(4, unlockingGlass);
+                    for (int i = 18; i < 22; i++)
+                        inventory.setItem(i, unlockedGlass);
+                    inventory.setItem(22, unlockingGlass);
                 }
+
+                if (currentTier == 2) {
+                    for (int i = 0; i < 7; i++)
+                        inventory.setItem(i, unlockedGlass);
+                    inventory.setItem(7, unlockingGlass);
+                    inventory.setItem(8, unlockingGlass);
+                    for (int i = 18; i < 25; i++)
+                        inventory.setItem(i, unlockedGlass);
+                    inventory.setItem(25, unlockingGlass);
+                    inventory.setItem(26, unlockingGlass);
+                }
+
+                if (currentTier == 3) {
+                    for (int i = 0; i < 9; i++)
+                        inventory.setItem(i, unlockedGlass);
+                    for (int i = 18; i < 27; i++)
+                        inventory.setItem(i, unlockedGlass);
+                }
+
+                ItemStack icon = new ItemStack(Material.HEAVY_CORE);
+                ItemMeta iconMeta = icon.getItemMeta();
+                // Tier 1 (Slot 10)
+                if (currentTier >= 1) {
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Tier 1");
+                    iconMeta.setLore(Arrays.asList(ChatColor.GRAY + "Unlocked"));
+                } else if (canResearch(player, "global", 1)) {
+                    iconMeta.setDisplayName(ChatColor.YELLOW + "Tier 1");
+                    iconMeta.setLore(Arrays.asList(ChatColor.YELLOW + "Click to unlock!",
+                            ChatColor.GRAY + "Cost: " + getRequiredXP("global", 1) + " levels"));
+                } else {
+                    iconMeta.setDisplayName(ChatColor.RED + "Tier 1");
+                    iconMeta.setLore(Arrays.asList(ChatColor.RED + "LOCKED",
+                            ChatColor.GRAY + "Requires " + getRequiredMinutes("global", 1) + "m playtime & "
+                                    + getRequiredXP("global", 1) + " levels"));
+                }
+                icon.setItemMeta(iconMeta);
+                inventory.setItem(10, icon);
+
+                // Tier 2 (Slot 13)
+                if (currentTier >= 2) {
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Tier 2");
+                    iconMeta.setLore(Arrays.asList(ChatColor.GRAY + "Unlocked"));
+                } else if (currentTier == 1 && canResearch(player, "global", 2)) {
+                    iconMeta.setDisplayName(ChatColor.YELLOW + "Tier 2");
+                    iconMeta.setLore(Arrays.asList(ChatColor.YELLOW + "Click to unlock!",
+                            ChatColor.GRAY + "Cost: " + getRequiredXP("global", 2) + " levels"));
+                } else {
+                    iconMeta.setDisplayName(ChatColor.RED + "Tier 2");
+                    String req = currentTier < 1 ? "Requires Tier 1"
+                            : "Requires " + getRequiredMinutes("global", 2) + "m playtime & "
+                                    + getRequiredXP("global", 2) + " levels";
+                    iconMeta.setLore(Arrays.asList(ChatColor.RED + "LOCKED", ChatColor.GRAY + req));
+                }
+                icon.setItemMeta(iconMeta);
+                inventory.setItem(13, icon);
+
+                // Tier 3 (Slot 16)
+                if (currentTier >= 3) {
+                    iconMeta.setDisplayName(ChatColor.GREEN + "Tier 3");
+                    iconMeta.setLore(Arrays.asList(ChatColor.GRAY + "Unlocked"));
+                } else if (currentTier == 2 && canResearch(player, "global", 3)) {
+                    iconMeta.setDisplayName(ChatColor.YELLOW + "Tier 3");
+                    iconMeta.setLore(Arrays.asList(ChatColor.YELLOW + "Click to unlock!",
+                            ChatColor.GRAY + "Cost: " + getRequiredXP("global", 3) + " levels"));
+                } else {
+                    iconMeta.setDisplayName(ChatColor.RED + "Tier 3");
+                    String req = currentTier < 2 ? "Requires Tier 2"
+                            : "Requires " + getRequiredMinutes("global", 3) + "m playtime & "
+                                    + getRequiredXP("global", 3) + " levels";
+                    iconMeta.setLore(Arrays.asList(ChatColor.RED + "LOCKED", ChatColor.GRAY + req));
+                }
+                icon.setItemMeta(iconMeta);
+                inventory.setItem(16, icon);
+
                 player.openInventory(inventory);
-                player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "tiers menu"));
+                player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "tiers"));
             }
 
             public static void openInvisibilityMenu(Player player) {
-                Inventory inventory = Bukkit.createInventory(null, 27,
-                        ChatColor.BLACK + "" + ChatColor.BOLD + "Invisibility research");
-                ItemStack icon = Recipes.invisibilityPotion.clone();
-                ItemMeta iconMeta = icon.getItemMeta();
-                iconMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
-
-                switch (onJoin.getPlayerFile(player).getFile().getInt("CurrentGlobalTier")) {
-                    case 0:
-                        for (int i = 0; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.RED + "Invisibility Tier 1");
-                        iconMeta.setLore(Arrays.asList("locked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Invisibility Tier 2");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Invisibility Tier 3");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                    case 1:
-                        for (int i = 0; i < 5; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 6; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 22; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 23; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Invisibility Tier 1");
-                        iconMeta.setLore(Arrays.asList("unlocked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.YELLOW + "Invisibility Tier 2");
-                        iconMeta.setLore(Arrays.asList("unlocking"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Invisibility Tier 3");
-                        iconMeta.setLore(Arrays.asList("locked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                    case 2:
-                        for (int i = 0; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Invisibility Tier 1");
-                        iconMeta.setLore(Arrays.asList("unlocked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Invisibility Tier 2");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Invisibility Tier 3");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                }
-                player.openInventory(inventory);
-                player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "invisibility menu"));
+                openGenericPotionMenu(player, "invisibility", Recipes.invisibilityDisplay, "Invisibility research");
             }
 
             public static void openSpeedMenu(Player player) {
-                Inventory inventory = Bukkit.createInventory(null, 27,
-                        ChatColor.BLACK + "" + ChatColor.BOLD + "Speed research");
-                ItemStack icon = Recipes.speedPotion.clone();
-                ItemMeta iconMeta = icon.getItemMeta();
-                iconMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
-
-                switch (onJoin.getPlayerFile(player).getFile().getInt("CurrentGlobalTier")) {
-                    case 0:
-                        for (int i = 0; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.RED + "Speed Tier 1");
-                        iconMeta.setLore(Arrays.asList("locked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Speed Tier 2");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Speed Tier 3");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                    case 1:
-                        for (int i = 0; i < 5; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 6; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 22; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 23; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Speed Tier 1");
-                        iconMeta.setLore(Arrays.asList("unlocked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.YELLOW + "Speed Tier 2");
-                        iconMeta.setLore(Arrays.asList("unlocking"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Speed Tier 3");
-                        iconMeta.setLore(Arrays.asList("locked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                    case 2:
-                        for (int i = 0; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Speed Tier 1");
-                        iconMeta.setLore(Arrays.asList("unlocked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Speed Tier 2");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Speed Tier 3");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                }
-                player.openInventory(inventory);
-                player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "speed menu"));
+                openGenericPotionMenu(player, "speed", Recipes.speedDisplay, "Speed research");
             }
 
             public static void openStrengthMenu(Player player) {
-                Inventory inventory = Bukkit.createInventory(null, 27,
-                        ChatColor.BLACK + "" + ChatColor.BOLD + "Strength research");
-                ItemStack icon = Recipes.strengthPotion.clone();
-                ItemMeta iconMeta = icon.getItemMeta();
-                iconMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
-
-                switch (onJoin.getPlayerFile(player).getFile().getInt("TotemTiers/StrenghtTier")) {
-                    case 0:
-                        for (int i = 0; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.RED + "Strength Tier 1");
-                        iconMeta.setLore(Arrays.asList("locked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Strength Tier 2");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Strength Tier 3");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                    case 1:
-                        for (int i = 0; i < 5; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 6; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 22; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 23; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Strength Tier 1");
-                        iconMeta.setLore(Arrays.asList("unlocked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.YELLOW + "Strength Tier 2");
-                        iconMeta.setLore(Arrays.asList("unlocking"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Strength Tier 3");
-                        iconMeta.setLore(Arrays.asList("locked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                    case 2:
-                        for (int i = 0; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Strength Tier 1");
-                        iconMeta.setLore(Arrays.asList("unlocked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Strength Tier 2");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Strength Tier 3");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                }
-                player.openInventory(inventory);
-                player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "strength menu"));
+                openGenericPotionMenu(player, "strength", Recipes.strengthDisplay, "Strength research");
             }
 
             public static void openHealthMenu(Player player) {
-                Inventory inventory = Bukkit.createInventory(null, 27,
-                        ChatColor.BLACK + "" + ChatColor.BOLD + "Health research");
-                ItemStack icon = Recipes.healthPotion.clone();
-                ItemMeta iconMeta = icon.getItemMeta();
-                iconMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
-
-                switch (onJoin.getPlayerFile(player).getFile().getInt("TotemTiers/HealthTier")) {
-                    case 0:
-                        for (int i = 0; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.RED + "Health Tier 1");
-                        iconMeta.setLore(Arrays.asList("locked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Health Tier 2");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Health Tier 3");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                    case 1:
-                        for (int i = 0; i < 5; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 6; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 22; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 23; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Health Tier 1");
-                        iconMeta.setLore(Arrays.asList("unlocked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.YELLOW + "Health Tier 2");
-                        iconMeta.setLore(Arrays.asList("unlocking"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Health Tier 3");
-                        iconMeta.setLore(Arrays.asList("locked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                    case 2:
-                        for (int i = 0; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Health Tier 1");
-                        iconMeta.setLore(Arrays.asList("unlocked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Health Tier 2");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Health Tier 3");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                }
-                player.openInventory(inventory);
-                player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "health menu"));
+                openGenericPotionMenu(player, "health", Recipes.healthDisplay, "Health research");
             }
 
             public static void openHasteMenu(Player player) {
-                Inventory inventory = Bukkit.createInventory(null, 27,
-                        ChatColor.BLACK + "" + ChatColor.BOLD + "Haste research");
-                ItemStack icon = Recipes.hastePotion.clone();
-                ItemMeta iconMeta = icon.getItemMeta();
-                iconMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
-
-                switch (onJoin.getPlayerFile(player).getFile().getInt("TotemTiers/HasteTier")) {
-                    case 0:
-                        for (int i = 0; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.RED + "Haste Tier 1");
-                        iconMeta.setLore(Arrays.asList("locked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Haste Tier 2");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Haste Tier 3");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                    case 1:
-                        for (int i = 0; i < 5; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 6; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 22; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 23; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Haste Tier 1");
-                        iconMeta.setLore(Arrays.asList("unlocked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.YELLOW + "Haste Tier 2");
-                        iconMeta.setLore(Arrays.asList("unlocking"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Haste Tier 3");
-                        iconMeta.setLore(Arrays.asList("locked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                    case 2:
-                        for (int i = 0; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Haste Tier 1");
-                        iconMeta.setLore(Arrays.asList("unlocked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Haste Tier 2");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Haste Tier 3");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                }
-                player.openInventory(inventory);
-                player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "haste menu"));
+                openGenericPotionMenu(player, "haste", Recipes.hasteDisplay, "Haste research");
             }
 
             public static void openFireResistanceMenu(Player player) {
-                Inventory inventory = Bukkit.createInventory(null, 27,
-                        ChatColor.BLACK + "" + ChatColor.BOLD + "Fire Resistance research");
-                ItemStack icon = Recipes.fireResistancePotion.clone();
-                ItemMeta iconMeta = icon.getItemMeta();
-                iconMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
-
-                switch (onJoin.getPlayerFile(player).getFile().getInt("TotemTiers/FireResistanceTier")) {
-                    case 0:
-                        for (int i = 0; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.RED + "Fire Resistance Tier 1");
-                        iconMeta.setLore(Arrays.asList("locked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Fire Resistance Tier 2");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Fire Resistance Tier 3");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                    case 1:
-                        for (int i = 0; i < 5; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        inventory.setItem(5, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 6; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 22; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        inventory.setItem(22, new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
-                        for (int i = 23; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.RED_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Fire Resistance Tier 1");
-                        iconMeta.setLore(Arrays.asList("unlocked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.YELLOW + "Fire Resistance Tier 2");
-                        iconMeta.setLore(Arrays.asList("unlocking"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.RED + "Fire Resistance Tier 3");
-                        iconMeta.setLore(Arrays.asList("locked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                    case 2:
-                        for (int i = 0; i < 9; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        for (int i = 18; i < 27; i++)
-                            inventory.setItem(i, new ItemStack(Material.LIME_STAINED_GLASS_PANE));
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Fire Resistance Tier 1");
-                        iconMeta.setLore(Arrays.asList("unlocked"));
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(10, icon);
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Fire Resistance Tier 2");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(13, icon);
-                        iconMeta.setDisplayName(ChatColor.GREEN + "Fire Resistance Tier 3");
-                        icon.setItemMeta(iconMeta);
-                        inventory.setItem(16, icon);
-                        break;
-                }
-                player.openInventory(inventory);
-                player.setMetadata("openedmenu", new FixedMetadataValue(getInstance(), "fire resistance menu"));
+                openGenericPotionMenu(player, "fire resistance", Recipes.fireResDisplay,
+                        "Fire Resistance research");
             }
         }
 
@@ -920,12 +730,10 @@ public class PlayerTotems extends JavaPlugin {
                         if (menu.equals("research tree")) {
                             switch (e.getSlot()) {
                                 case 10:
-                                    // PotionMenus.openInvisibilityMenu(player);
-                                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1, 1);
+                                    PotionMenus.openInvisibilityMenu(player);
                                     break;
                                 case 11:
-                                    // PotionMenus.openSpeedMenu(player);
-                                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1, 1);
+                                    PotionMenus.openSpeedMenu(player);
                                     break;
                                 case 12:
                                     PotionMenus.openStrengthMenu(player);
@@ -946,31 +754,93 @@ public class PlayerTotems extends JavaPlugin {
                         }
 
                         if (menu.equals("tiers")) {
+                            int current = getTier(player, "global");
                             switch (e.getSlot()) {
-                                case 11:
-                                    if (getTier(player, "global") >= 1) {
-                                        player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1, 1);
-                                    } else if (getTier(player, "global") == 0 && canResearch(player, "global", 1)) {
-                                        onJoin.getPlayerFile(player).set("CurrentGlobalTier", 1);
+                                case 10: // Tier 1
+                                    if (current < 1 && canResearch(player, "global", 1)) {
+                                        player.setLevel(player.getLevel() - getRequiredXP("global", 1));
+                                        Files f = onJoin.getPlayerFile(player);
+                                        f.set("CurrentGlobalTier", 1);
+                                        f.save();
                                         player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1, 1);
+                                        PotionMenus.openTiersMenu(player);
+                                    } else {
+                                        player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1, 1);
                                     }
                                     break;
-                                case 14:
-                                    if (getTier(player, "global") >= 2) {
-                                        player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1, 1);
-                                    } else if (getTier(player, "global") == 1 && canResearch(player, "global", 2)) {
-                                        onJoin.getPlayerFile(player).set("CurrentGlobalTier", 2);
+                                case 13: // Tier 2
+                                    if (current == 1 && canResearch(player, "global", 2)) {
+                                        player.setLevel(player.getLevel() - getRequiredXP("global", 2));
+                                        Files f = onJoin.getPlayerFile(player);
+                                        f.set("CurrentGlobalTier", 2);
+                                        f.save();
                                         player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1, 1);
+                                        PotionMenus.openTiersMenu(player);
+                                    } else {
+                                        player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1, 1);
                                     }
                                     break;
-                                case 17:
-                                    if (getTier(player, "global") == 3) {
-                                        player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1, 1);
-                                    } else if (getTier(player, "global") == 2 && canResearch(player, "global", 3)) {
-                                        onJoin.getPlayerFile(player).set("CurrentGlobalTier", 3);
+                                case 16: // Tier 3
+                                    if (current == 2 && canResearch(player, "global", 3)) {
+                                        player.setLevel(player.getLevel() - getRequiredXP("global", 3));
+                                        Files f = onJoin.getPlayerFile(player);
+                                        f.set("CurrentGlobalTier", 3);
+                                        f.save();
                                         player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1, 1);
+                                        PotionMenus.openTiersMenu(player);
+                                    } else {
+                                        player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1, 1);
                                     }
                                     break;
+                            }
+                        } else if (menu.endsWith(" menu")) {
+                            String type = menu.replace(" menu", "");
+                            if (!getInstance().isPotionEnabled(type)) {
+                                player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1, 1);
+                                return;
+                            }
+                            int current = getTier(player, type);
+                            int globalTier = getTier(player, "global");
+                            int slot = e.getSlot();
+                            int targetTier = 0;
+                            if (slot == 10)
+                                targetTier = 1;
+                            else if (slot == 13)
+                                targetTier = 2;
+                            else if (slot == 16)
+                                targetTier = 3;
+
+                            if (targetTier > 0 && current == (targetTier - 1) && globalTier >= targetTier
+                                    && canResearch(player, type, targetTier)) {
+                                player.setLevel(player.getLevel() - getRequiredXP(type, targetTier));
+                                Files f = onJoin.getPlayerFile(player);
+                                String configPath = getTotemTierPath(player, type);
+
+                                f.set(configPath, targetTier);
+                                f.save();
+                                player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1, 1);
+                                switch (type.toLowerCase()) {
+                                    case "strength":
+                                        PotionMenus.openStrengthMenu(player);
+                                        break;
+                                    case "health":
+                                        PotionMenus.openHealthMenu(player);
+                                        break;
+                                    case "haste":
+                                        PotionMenus.openHasteMenu(player);
+                                        break;
+                                    case "fire resistance":
+                                        PotionMenus.openFireResistanceMenu(player);
+                                        break;
+                                    case "speed":
+                                        PotionMenus.openSpeedMenu(player);
+                                        break;
+                                    case "invisibility":
+                                        PotionMenus.openInvisibilityMenu(player);
+                                        break;
+                                }
+                            } else if (targetTier > 0) {
+                                player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1, 1);
                             }
                         }
                     }
@@ -1015,6 +885,12 @@ public class PlayerTotems extends JavaPlugin {
         public static ItemStack HealthTotemT3;
         public static ItemStack FireResistanceTotemT3;
         public static ItemStack HasteTotemT3;
+        public static ItemStack strengthDisplay;
+        public static ItemStack healthDisplay;
+        public static ItemStack hasteDisplay;
+        public static ItemStack fireResDisplay;
+        public static ItemStack speedDisplay;
+        public static ItemStack invisibilityDisplay;
 
         public static void register() {
             // heart of the warden
@@ -1031,42 +907,72 @@ public class PlayerTotems extends JavaPlugin {
 
             // invisibility
             invisibilityPotion = new ItemStack(Material.POTION, 1);
-            PotionMeta invisibilityMeta = (PotionMeta) invisibilityPotion.getItemMeta();
+            invisibilityDisplay = new ItemStack(Material.POTION, 1);
+            PotionMeta invisibilityMeta = (PotionMeta) invisibilityDisplay.getItemMeta();
             invisibilityMeta.setLore(Arrays.asList(ChatColor.RED + "Comming soon!"));
             invisibilityMeta.setBasePotionType(PotionType.INVISIBILITY);
-            invisibilityPotion.setItemMeta(invisibilityMeta);
+            invisibilityMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+            invisibilityDisplay.setItemMeta(invisibilityMeta);
+
             // speed
             speedPotion = new ItemStack(Material.POTION, 1);
-            PotionMeta speedMeta = (PotionMeta) speedPotion.getItemMeta();
+            speedDisplay = new ItemStack(Material.POTION, 1);
+            PotionMeta speedMeta = (PotionMeta) speedDisplay.getItemMeta();
             speedMeta.setLore(Arrays.asList(ChatColor.RED + "Comming soon!"));
             speedMeta.setBasePotionType(PotionType.SWIFTNESS);
-            speedPotion.setItemMeta(speedMeta);
+            speedMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+            speedDisplay.setItemMeta(speedMeta);
+
             // haste
             hastePotion = new ItemStack(Material.POTION, 1);
             PotionMeta hasteMeta = (PotionMeta) hastePotion.getItemMeta();
             hasteMeta.setBasePotionType(PotionType.LEAPING);
-            hasteMeta.setCustomName("Haste Potion");
             hasteMeta.setDisplayName("Haste Potion");
             hastePotion.setItemMeta(hasteMeta);
+
+            hasteDisplay = hastePotion.clone();
+            ItemMeta hasteDisplayMeta = hasteDisplay.getItemMeta();
+            hasteDisplayMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+            hasteDisplay.setItemMeta(hasteDisplayMeta);
+
             // health
             healthPotion = new ItemStack(Material.POTION, 1);
-            PotionMeta healthMeta = (PotionMeta) healthPotion.getItemMeta();
-            healthMeta.setBasePotionType(PotionType.HEALING);
-            healthPotion.setItemMeta(healthMeta);
+            PotionMeta healthReqMeta = (PotionMeta) healthPotion.getItemMeta();
+            healthReqMeta.setBasePotionType(PotionType.HEALING);
+            healthPotion.setItemMeta(healthReqMeta);
+
+            healthDisplay = healthPotion.clone();
+            ItemMeta healthDisplayMeta = healthDisplay.getItemMeta();
+            healthDisplayMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+            healthDisplay.setItemMeta(healthDisplayMeta);
+
+            // strength
             strengthPotion = new ItemStack(Material.POTION, 1);
-            PotionMeta strengthMeta = (PotionMeta) strengthPotion.getItemMeta();
-            strengthMeta.setBasePotionType(PotionType.STRENGTH);
-            strengthPotion.setItemMeta(strengthMeta);
+            PotionMeta strengthReqMeta = (PotionMeta) strengthPotion.getItemMeta();
+            strengthReqMeta.setBasePotionType(PotionType.STRENGTH);
+            strengthPotion.setItemMeta(strengthReqMeta);
+
+            strengthDisplay = strengthPotion.clone();
+            ItemMeta strengthDisplayMeta = strengthDisplay.getItemMeta();
+            strengthDisplayMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+            strengthDisplay.setItemMeta(strengthDisplayMeta);
+
+            // fire resistance
             fireResistancePotion = new ItemStack(Material.POTION, 1);
-            PotionMeta fireResMeta = (PotionMeta) fireResistancePotion.getItemMeta();
-            fireResMeta.setBasePotionType(PotionType.FIRE_RESISTANCE);
-            fireResistancePotion.setItemMeta(fireResMeta);
+            PotionMeta fireReqMeta = (PotionMeta) fireResistancePotion.getItemMeta();
+            fireReqMeta.setBasePotionType(PotionType.FIRE_RESISTANCE);
+            fireResistancePotion.setItemMeta(fireReqMeta);
+
+            fireResDisplay = fireResistancePotion.clone();
+            ItemMeta fireDisplayMeta = fireResDisplay.getItemMeta();
+            fireDisplayMeta.addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
+            fireResDisplay.setItemMeta(fireDisplayMeta);
 
             // TOTEMS T1
 
             StrenghtTotem = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta StrenghtTotemMeta = StrenghtTotem.getItemMeta();
-            StrenghtTotemMeta.setDisplayName(ChatColor.YELLOW + "Strenght Totem");
+            StrenghtTotemMeta.setDisplayName(getInstance().getTotemColor("strength") + "Strenght Totem");
             StrenghtTotemMeta.getPersistentDataContainer().set(keys.STRENGHT_TOTEM, PersistentDataType.STRING,
                     "StrenghtTotem");
             StrenghtTotemMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
@@ -1074,7 +980,7 @@ public class PlayerTotems extends JavaPlugin {
             StrenghtTotem.setItemMeta(StrenghtTotemMeta);
             HealthTotem = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta HealthTotemMeta = HealthTotem.getItemMeta();
-            HealthTotemMeta.setDisplayName(ChatColor.YELLOW + "Health Totem");
+            HealthTotemMeta.setDisplayName(getInstance().getTotemColor("health") + "Health Totem");
             HealthTotemMeta.getPersistentDataContainer().set(keys.HEALTH_TOTEM, PersistentDataType.STRING,
                     "HealthTotem");
             HealthTotemMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
@@ -1082,7 +988,8 @@ public class PlayerTotems extends JavaPlugin {
             HealthTotem.setItemMeta(HealthTotemMeta);
             FireResistanceTotem = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta FireResistanceTotemMeta = FireResistanceTotem.getItemMeta();
-            FireResistanceTotemMeta.setDisplayName(ChatColor.RED + "Fire Resistance Totem");
+            FireResistanceTotemMeta
+                    .setDisplayName(getInstance().getTotemColor("fire resistance") + "Fire Resistance Totem");
             FireResistanceTotemMeta.getPersistentDataContainer().set(keys.FIRE_RESISTANCE_TOTEM,
                     PersistentDataType.STRING, "FireResistanceTotem");
             FireResistanceTotemMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
@@ -1090,7 +997,7 @@ public class PlayerTotems extends JavaPlugin {
             FireResistanceTotem.setItemMeta(FireResistanceTotemMeta);
             HasteTotem = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta HasteTotemMeta = HasteTotem.getItemMeta();
-            HasteTotemMeta.setDisplayName(ChatColor.YELLOW + "Haste Totem");
+            HasteTotemMeta.setDisplayName(getInstance().getTotemColor("haste") + "Haste Totem");
             HasteTotemMeta.getPersistentDataContainer().set(keys.HASTE_TOTEM, PersistentDataType.STRING, "HasteTotem");
             HasteTotemMeta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
             HasteTotemMeta.addEnchant(Enchantment.UNBREAKING, 1, true);
@@ -1098,7 +1005,7 @@ public class PlayerTotems extends JavaPlugin {
             // TIER 2
             StrenghtTotemT2 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta StrenghtTotemT2Meta = StrenghtTotemT2.getItemMeta();
-            StrenghtTotemT2Meta.setDisplayName(ChatColor.YELLOW + "Strenght Totem T2");
+            StrenghtTotemT2Meta.setDisplayName(getInstance().getTotemColor("strength") + "Strenght Totem T2");
             StrenghtTotemT2Meta.getPersistentDataContainer().set(keys.STRENGTH_TOTEM_TIER2, PersistentDataType.STRING,
                     "StrenghtTotemT2");
             StrenghtTotemT2Meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
@@ -1107,7 +1014,7 @@ public class PlayerTotems extends JavaPlugin {
 
             HealthTotemT2 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta HealthTotemT2Meta = HealthTotemT2.getItemMeta();
-            HealthTotemT2Meta.setDisplayName(ChatColor.YELLOW + "Health Totem T2");
+            HealthTotemT2Meta.setDisplayName(getInstance().getTotemColor("health") + "Health Totem T2");
             HealthTotemT2Meta.getPersistentDataContainer().set(keys.HEALTH_TOTEM_TIER2, PersistentDataType.STRING,
                     "HealthTotemT2");
             HealthTotemT2Meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
@@ -1116,7 +1023,8 @@ public class PlayerTotems extends JavaPlugin {
 
             FireResistanceTotemT2 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta FireResistanceTotemT2Meta = FireResistanceTotemT2.getItemMeta();
-            FireResistanceTotemT2Meta.setDisplayName(ChatColor.YELLOW + "Fire Resistance Totem T2");
+            FireResistanceTotemT2Meta
+                    .setDisplayName(getInstance().getTotemColor("fire resistance") + "Fire Resistance Totem T2");
             FireResistanceTotemT2Meta.getPersistentDataContainer().set(keys.FIRE_RESISTANCE_TOTEM_TIER2,
                     PersistentDataType.STRING, "FireResistanceTotemT2");
             FireResistanceTotemT2Meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
@@ -1125,7 +1033,7 @@ public class PlayerTotems extends JavaPlugin {
 
             HasteTotemT2 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta HasteTotemT2Meta = HasteTotemT2.getItemMeta();
-            HasteTotemT2Meta.setDisplayName(ChatColor.YELLOW + "Haste Totem T2");
+            HasteTotemT2Meta.setDisplayName(getInstance().getTotemColor("haste") + "Haste Totem T2");
             HasteTotemT2Meta.getPersistentDataContainer().set(keys.HASTE_TOTEM_TIER2, PersistentDataType.STRING,
                     "HasteTotemT2");
             HasteTotemT2Meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
@@ -1134,7 +1042,7 @@ public class PlayerTotems extends JavaPlugin {
 
             StrenghtTotemT3 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta StrenghtTotemT3Meta = StrenghtTotemT3.getItemMeta();
-            StrenghtTotemT3Meta.setDisplayName(ChatColor.YELLOW + "Strenght Totem T3");
+            StrenghtTotemT3Meta.setDisplayName(getInstance().getTotemColor("strength") + "Strenght Totem T3");
             StrenghtTotemT3Meta.getPersistentDataContainer().set(keys.STRENGTH_TOTEM_TIER3, PersistentDataType.STRING,
                     "StrenghtTotemT3");
             StrenghtTotemT3Meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
@@ -1143,7 +1051,7 @@ public class PlayerTotems extends JavaPlugin {
 
             HealthTotemT3 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta HealthTotemT3Meta = HealthTotemT3.getItemMeta();
-            HealthTotemT3Meta.setDisplayName(ChatColor.YELLOW + "Health Totem T3");
+            HealthTotemT3Meta.setDisplayName(getInstance().getTotemColor("health") + "Health Totem T3");
             HealthTotemT3Meta.getPersistentDataContainer().set(keys.HEALTH_TOTEM_TIER3, PersistentDataType.STRING,
                     "HealthTotemT3");
             HealthTotemT3Meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
@@ -1152,7 +1060,8 @@ public class PlayerTotems extends JavaPlugin {
 
             FireResistanceTotemT3 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta FireResistanceTotemT3Meta = FireResistanceTotemT3.getItemMeta();
-            FireResistanceTotemT3Meta.setDisplayName(ChatColor.YELLOW + "Fire Resistance Totem T3");
+            FireResistanceTotemT3Meta
+                    .setDisplayName(getInstance().getTotemColor("fire resistance") + "Fire Resistance Totem T3");
             FireResistanceTotemT3Meta.getPersistentDataContainer().set(keys.FIRE_RESISTANCE_TOTEM_TIER3,
                     PersistentDataType.STRING, "FireResistanceTotemT3");
             FireResistanceTotemT3Meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
@@ -1161,7 +1070,7 @@ public class PlayerTotems extends JavaPlugin {
 
             HasteTotemT3 = new ItemStack(Material.TOTEM_OF_UNDYING);
             ItemMeta HasteTotemT3Meta = HasteTotemT3.getItemMeta();
-            HasteTotemT3Meta.setDisplayName(ChatColor.YELLOW + "Haste Totem T3");
+            HasteTotemT3Meta.setDisplayName(getInstance().getTotemColor("haste") + "Haste Totem T3");
             HasteTotemT3Meta.getPersistentDataContainer().set(keys.HASTE_TOTEM_TIER3, PersistentDataType.STRING,
                     "HasteTotemT3");
             HasteTotemT3Meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
@@ -1212,22 +1121,28 @@ public class PlayerTotems extends JavaPlugin {
             HealthTotemT2Recipe.shape(" P ",
                     "NTN",
                     " P ");
+            HealthTotemT2Recipe.setIngredient('T', Material.TOTEM_OF_UNDYING);
             HealthTotemT2Recipe.setIngredient('N', Material.NETHERITE_INGOT);
             HealthTotemT2Recipe.setIngredient('P', new RecipeChoice.ExactChoice(healthPotion));
+
             StrenghtTotemT2Recipe.shape(" P ",
                     "NTN",
                     " P ");
+            StrenghtTotemT2Recipe.setIngredient('T', Material.TOTEM_OF_UNDYING);
             StrenghtTotemT2Recipe.setIngredient('N', Material.NETHERITE_INGOT);
             StrenghtTotemT2Recipe.setIngredient('P', new RecipeChoice.ExactChoice(strengthPotion));
+
             FireResistanceTotemT2Recipe.shape(" P ",
                     "NTN",
                     " P ");
+            FireResistanceTotemT2Recipe.setIngredient('T', Material.TOTEM_OF_UNDYING);
             FireResistanceTotemT2Recipe.setIngredient('N', Material.NETHERITE_INGOT);
             FireResistanceTotemT2Recipe.setIngredient('P', new RecipeChoice.ExactChoice(fireResistancePotion));
+
             HasteTotemT2Recipe.shape(" P ",
                     "NTN",
                     " P ");
-            HasteTotemT2Recipe.setIngredient('T', new RecipeChoice.ExactChoice(HasteTotem));
+            HasteTotemT2Recipe.setIngredient('T', Material.TOTEM_OF_UNDYING);
             HasteTotemT2Recipe.setIngredient('N', Material.NETHERITE_INGOT);
             HasteTotemT2Recipe.setIngredient('P', Material.GOLD_BLOCK);
 
@@ -1241,15 +1156,15 @@ public class PlayerTotems extends JavaPlugin {
             HealthTotemT3Recipe.shape(" S ",
                     "NTN",
                     " P ");
-            HealthTotemT3Recipe.setIngredient('T', new RecipeChoice.ExactChoice(HealthTotemT2));
+            HealthTotemT3Recipe.setIngredient('T', Material.TOTEM_OF_UNDYING);
             HealthTotemT3Recipe.setIngredient('N', Material.NETHERITE_INGOT);
             HealthTotemT3Recipe.setIngredient('S', new RecipeChoice.ExactChoice(heartOfTheWarden));
-            HealthTotemT3Recipe.setIngredient('P', new RecipeChoice.ExactChoice(healthPotion));
+            HealthTotemT3Recipe.setIngredient('P', Material.POTION);
 
             StrenghtTotemT3Recipe.shape(" S ",
                     "NTN",
                     " H ");
-            StrenghtTotemT3Recipe.setIngredient('T', new RecipeChoice.ExactChoice(StrenghtTotemT2));
+            StrenghtTotemT3Recipe.setIngredient('T', Material.TOTEM_OF_UNDYING);
             StrenghtTotemT3Recipe.setIngredient('N', Material.NETHERITE_INGOT);
             StrenghtTotemT3Recipe.setIngredient('S', new RecipeChoice.ExactChoice(heartOfTheWarden));
             StrenghtTotemT3Recipe.setIngredient('H', new RecipeChoice.ExactChoice(heartOfTheWarden));
@@ -1257,7 +1172,7 @@ public class PlayerTotems extends JavaPlugin {
             FireResistanceTotemT3Recipe.shape(" S ",
                     "NTN",
                     " M ");
-            FireResistanceTotemT3Recipe.setIngredient('T', new RecipeChoice.ExactChoice(FireResistanceTotemT2));
+            FireResistanceTotemT3Recipe.setIngredient('T', Material.TOTEM_OF_UNDYING);
             FireResistanceTotemT3Recipe.setIngredient('N', Material.NETHERITE_INGOT);
             FireResistanceTotemT3Recipe.setIngredient('S', new RecipeChoice.ExactChoice(heartOfTheWarden));
             FireResistanceTotemT3Recipe.setIngredient('M', Material.MAGMA_CREAM);
@@ -1265,7 +1180,7 @@ public class PlayerTotems extends JavaPlugin {
             HasteTotemT3Recipe.shape(" S ",
                     "NTN",
                     " G ");
-            HasteTotemT3Recipe.setIngredient('T', new RecipeChoice.ExactChoice(HasteTotemT2));
+            HasteTotemT3Recipe.setIngredient('T', Material.TOTEM_OF_UNDYING);
             HasteTotemT3Recipe.setIngredient('N', Material.NETHERITE_INGOT);
             HasteTotemT3Recipe.setIngredient('S', new RecipeChoice.ExactChoice(heartOfTheWarden));
             HasteTotemT3Recipe.setIngredient('G', Material.GOLD_BLOCK);
@@ -1382,6 +1297,28 @@ public class PlayerTotems extends JavaPlugin {
         }
     }
 
+    public class BypassTime implements CommandExecutor {
+        @Override
+        public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+            if (!(sender instanceof Player))
+                return false;
+            Player player = (Player) sender;
+            if (!player.hasPermission("playertotems.bypasstime")) {
+                player.sendMessage(ChatColor.RED + "You do not have permission to use this command.");
+                return true;
+            }
+            UUID uuid = player.getUniqueId();
+            if (Research.bypassPlayers.contains(uuid)) {
+                Research.bypassPlayers.remove(uuid);
+                player.sendMessage(ChatColor.YELLOW + "Time bypass " + ChatColor.RED + "DISABLED");
+            } else {
+                Research.bypassPlayers.add(uuid);
+                player.sendMessage(ChatColor.YELLOW + "Time bypass " + ChatColor.GREEN + "ENABLED");
+            }
+            return true;
+        }
+    }
+
     public class OnDropListener implements Listener {
         @EventHandler
         public void onDrop(PlayerDropItemEvent e) {
@@ -1417,43 +1354,317 @@ public class PlayerTotems extends JavaPlugin {
                 return;
 
             ItemMeta resultMeta = result.getItemMeta();
-            String baseName = "";
+            Player player = (Player) e.getViewers().get(0);
 
-            if (resultMeta.getPersistentDataContainer().has(keys.HEALTH_TOTEM, PersistentDataType.STRING)) {
-                baseName = "Health Totem";
-            } else if (resultMeta.getPersistentDataContainer().has(keys.STRENGHT_TOTEM, PersistentDataType.STRING)) {
-                baseName = "Strenght Totem";
+            // Workaround for Spigot's shape recipe matcher prioritizing identical base
+            // materials incorrectly
+            ItemStack[] matrix = e.getInventory().getMatrix();
+            boolean hasT1Strength = false, hasT1Health = false, hasT1Fire = false, hasT1Haste = false;
+            boolean hasT2Strength = false, hasT2Health = false, hasT2Fire = false, hasT2Haste = false;
+            boolean hasStrengthPotion = false, hasHealingPotion = false, hasFirePotion = false;
+            boolean hasGoldBlock = false, hasGoldPickaxe = false, hasMagmaCream = false;
+
+            for (ItemStack item : matrix) {
+                if (item == null)
+                    continue;
+                if (item.getType() == Material.TOTEM_OF_UNDYING && item.hasItemMeta()) {
+                    PersistentDataContainer pdc = item.getItemMeta().getPersistentDataContainer();
+                    if (pdc.has(keys.STRENGHT_TOTEM, PersistentDataType.STRING))
+                        hasT1Strength = true;
+                    else if (pdc.has(keys.HEALTH_TOTEM, PersistentDataType.STRING))
+                        hasT1Health = true;
+                    else if (pdc.has(keys.FIRE_RESISTANCE_TOTEM, PersistentDataType.STRING))
+                        hasT1Fire = true;
+                    else if (pdc.has(keys.HASTE_TOTEM, PersistentDataType.STRING))
+                        hasT1Haste = true;
+                    else if (pdc.has(keys.STRENGTH_TOTEM_TIER2, PersistentDataType.STRING))
+                        hasT2Strength = true;
+                    else if (pdc.has(keys.HEALTH_TOTEM_TIER2, PersistentDataType.STRING))
+                        hasT2Health = true;
+                    else if (pdc.has(keys.FIRE_RESISTANCE_TOTEM_TIER2, PersistentDataType.STRING))
+                        hasT2Fire = true;
+                    else if (pdc.has(keys.HASTE_TOTEM_TIER2, PersistentDataType.STRING))
+                        hasT2Haste = true;
+                }
+                if (item.getType() == Material.POTION || item.getType() == Material.SPLASH_POTION
+                        || item.getType() == Material.LINGERING_POTION) {
+                    if (item.hasItemMeta() && item.getItemMeta() instanceof PotionMeta) {
+                        PotionType type = ((PotionMeta) item.getItemMeta()).getBasePotionType();
+                        if (type == PotionType.STRENGTH)
+                            hasStrengthPotion = true;
+                        else if (type == PotionType.HEALING)
+                            hasHealingPotion = true;
+                        else if (type == PotionType.FIRE_RESISTANCE)
+                            hasFirePotion = true;
+                    }
+                }
+                if (item.getType() == Material.GOLD_BLOCK)
+                    hasGoldBlock = true;
+                if (item.getType() == Material.GOLDEN_PICKAXE)
+                    hasGoldPickaxe = true;
+                if (item.getType() == Material.MAGMA_CREAM)
+                    hasMagmaCream = true;
+            }
+
+            boolean isT1 = resultMeta.getPersistentDataContainer().has(keys.STRENGHT_TOTEM, PersistentDataType.STRING)
+                    ||
+                    resultMeta.getPersistentDataContainer().has(keys.HEALTH_TOTEM, PersistentDataType.STRING) ||
+                    resultMeta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM, PersistentDataType.STRING)
+                    ||
+                    resultMeta.getPersistentDataContainer().has(keys.HASTE_TOTEM, PersistentDataType.STRING);
+
+            boolean isT2 = resultMeta.getPersistentDataContainer().has(keys.STRENGTH_TOTEM_TIER2,
+                    PersistentDataType.STRING) ||
+                    resultMeta.getPersistentDataContainer().has(keys.HEALTH_TOTEM_TIER2, PersistentDataType.STRING) ||
+                    resultMeta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM_TIER2,
+                            PersistentDataType.STRING)
+                    ||
+                    resultMeta.getPersistentDataContainer().has(keys.HASTE_TOTEM_TIER2, PersistentDataType.STRING);
+
+            boolean isT3 = resultMeta.getPersistentDataContainer().has(keys.STRENGTH_TOTEM_TIER3,
+                    PersistentDataType.STRING) ||
+                    resultMeta.getPersistentDataContainer().has(keys.HEALTH_TOTEM_TIER3, PersistentDataType.STRING) ||
+                    resultMeta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM_TIER3,
+                            PersistentDataType.STRING)
+                    ||
+                    resultMeta.getPersistentDataContainer().has(keys.HASTE_TOTEM_TIER3, PersistentDataType.STRING);
+
+            if (isT1) {
+                if (hasStrengthPotion)
+                    result = Recipes.StrenghtTotem.clone();
+                else if (hasHealingPotion)
+                    result = Recipes.HealthTotem.clone();
+                else if (hasFirePotion)
+                    result = Recipes.FireResistanceTotem.clone();
+                else if (hasGoldPickaxe)
+                    result = Recipes.HasteTotem.clone();
+                resultMeta = result.getItemMeta();
+                e.getInventory().setResult(result);
+            } else if (isT2) {
+                if (hasT1Strength || hasStrengthPotion)
+                    result = Recipes.StrenghtTotemT2.clone();
+                else if (hasT1Health || hasHealingPotion)
+                    result = Recipes.HealthTotemT2.clone();
+                else if (hasT1Fire || hasFirePotion)
+                    result = Recipes.FireResistanceTotemT2.clone();
+                else if (hasT1Haste || hasGoldBlock)
+                    result = Recipes.HasteTotemT2.clone();
+                resultMeta = result.getItemMeta();
+                e.getInventory().setResult(result);
+            } else if (isT3) {
+                if (hasT2Strength || (hasT2Strength && hasStrengthPotion))
+                    result = Recipes.StrenghtTotemT3.clone();
+                else if (hasT2Health || (hasT2Health && hasHealingPotion))
+                    result = Recipes.HealthTotemT3.clone();
+                else if (hasT2Fire || hasMagmaCream)
+                    result = Recipes.FireResistanceTotemT3.clone();
+                else if (hasT2Haste || hasGoldBlock)
+                    result = Recipes.HasteTotemT3.clone();
+                resultMeta = result.getItemMeta();
+                e.getInventory().setResult(result);
+            }
+
+            String researchType = "";
+            int requiredTier = 0;
+
+            if (resultMeta.getPersistentDataContainer().has(keys.STRENGHT_TOTEM, PersistentDataType.STRING)) {
+                researchType = "strength";
+                requiredTier = 1;
+            } else if (resultMeta.getPersistentDataContainer().has(keys.HEALTH_TOTEM, PersistentDataType.STRING)) {
+                researchType = "health";
+                requiredTier = 1;
             } else if (resultMeta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM,
                     PersistentDataType.STRING)) {
-                baseName = "Fire Resistance Totem";
-            } else if (resultMeta.getPersistentDataContainer().has(keys.HASTE_TOTEM,
+                researchType = "fire resistance";
+                requiredTier = 1;
+            } else if (resultMeta.getPersistentDataContainer().has(keys.HASTE_TOTEM, PersistentDataType.STRING)) {
+                researchType = "haste";
+                requiredTier = 1;
+            } else if (resultMeta.getPersistentDataContainer().has(keys.STRENGTH_TOTEM_TIER2,
                     PersistentDataType.STRING)) {
-                baseName = "Haste Totem";
+                researchType = "strength";
+                requiredTier = 2;
+            } else if (resultMeta.getPersistentDataContainer().has(keys.HEALTH_TOTEM_TIER2,
+                    PersistentDataType.STRING)) {
+                researchType = "health";
+                requiredTier = 2;
+            } else if (resultMeta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM_TIER2,
+                    PersistentDataType.STRING)) {
+                researchType = "fire resistance";
+                requiredTier = 2;
+            } else if (resultMeta.getPersistentDataContainer().has(keys.HASTE_TOTEM_TIER2, PersistentDataType.STRING)) {
+                researchType = "haste";
+                requiredTier = 2;
+            } else if (resultMeta.getPersistentDataContainer().has(keys.STRENGTH_TOTEM_TIER3,
+                    PersistentDataType.STRING)) {
+                researchType = "strength";
+                requiredTier = 3;
+            } else if (resultMeta.getPersistentDataContainer().has(keys.HEALTH_TOTEM_TIER3,
+                    PersistentDataType.STRING)) {
+                researchType = "health";
+                requiredTier = 3;
+            } else if (resultMeta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM_TIER3,
+                    PersistentDataType.STRING)) {
+                researchType = "fire resistance";
+                requiredTier = 3;
+            } else if (resultMeta.getPersistentDataContainer().has(keys.HASTE_TOTEM_TIER3, PersistentDataType.STRING)) {
+                researchType = "haste";
+                requiredTier = 3;
+            }
+            NamespacedKey ingredientKeyToMatch = null;
+            PotionType requiredPotionType = null;
+
+            if (requiredTier == 2) {
+                switch (researchType) {
+                    case "strength":
+                        ingredientKeyToMatch = keys.STRENGHT_TOTEM;
+                        requiredPotionType = PotionType.STRENGTH;
+                        break;
+                    case "health":
+                        ingredientKeyToMatch = keys.HEALTH_TOTEM;
+                        requiredPotionType = PotionType.HEALING;
+                        break;
+                    case "fire resistance":
+                        ingredientKeyToMatch = keys.FIRE_RESISTANCE_TOTEM;
+                        requiredPotionType = PotionType.FIRE_RESISTANCE;
+                        break;
+                    case "haste":
+                        ingredientKeyToMatch = keys.HASTE_TOTEM;
+                        break;
+                }
+            } else if (requiredTier == 3) {
+                switch (researchType) {
+                    case "strength":
+                        ingredientKeyToMatch = keys.STRENGTH_TOTEM_TIER2;
+                        break;
+                    case "health":
+                        ingredientKeyToMatch = keys.HEALTH_TOTEM_TIER2;
+                        requiredPotionType = PotionType.HEALING;
+                        break;
+                    case "fire resistance":
+                        ingredientKeyToMatch = keys.FIRE_RESISTANCE_TOTEM_TIER2;
+                        break;
+                    case "haste":
+                        ingredientKeyToMatch = keys.HASTE_TOTEM_TIER2;
+                        break;
+                }
+            }
+            if (ingredientKeyToMatch != null) {
+                boolean hasCorrectTotem = false;
+                boolean hasCorrectPotion = true;
+                int potionsFound = 0;
+                String inheritedName = null;
+
+                for (ItemStack item : e.getInventory().getMatrix()) {
+                    if (item == null)
+                        continue;
+
+                    if (item.getType() == Material.TOTEM_OF_UNDYING) {
+                        if (item.hasItemMeta() && item.getItemMeta().getPersistentDataContainer()
+                                .has(ingredientKeyToMatch, PersistentDataType.STRING)) {
+                            hasCorrectTotem = true;
+                            inheritedName = item.getItemMeta().getPersistentDataContainer().get(keys.PLAYER_HEAD,
+                                    PersistentDataType.STRING);
+                        }
+                    } else if ((item.getType() == Material.POTION || item.getType() == Material.SPLASH_POTION
+                            || item.getType() == Material.LINGERING_POTION) && requiredPotionType != null) {
+                        potionsFound++;
+                        PotionMeta pMeta = (PotionMeta) item.getItemMeta();
+                        PotionType type = pMeta.getBasePotionType();
+
+                        if (type != requiredPotionType && !type.name().contains(requiredPotionType.name())) {
+                            hasCorrectPotion = false;
+                        }
+                    }
+                }
+
+                if (requiredPotionType != null && potionsFound == 0)
+                    hasCorrectPotion = false;
+
+                if (!hasCorrectTotem) {
+                    player.sendMessage(ChatColor.RED + "[Debug] Missing required " + researchType.toUpperCase()
+                            + " totem from previous tier!");
+                    e.getInventory().setResult(null);
+                    return;
+                }
+                if (!hasCorrectPotion) {
+                    player.sendMessage(ChatColor.RED + "[Debug] Invalid or missing potion type! Needs: "
+                            + requiredPotionType.name());
+                    e.getInventory().setResult(null);
+                    return;
+                }
+                if (inheritedName != null) {
+                    resultMeta.getPersistentDataContainer().set(keys.PLAYER_HEAD, PersistentDataType.STRING,
+                            inheritedName);
+                }
+            }
+            if (requiredTier > 0 && Research.getTier(player, researchType) < requiredTier) {
+                player.sendMessage(ChatColor.RED + "[Debug] You haven't researched how to craft this tier yet!");
+                e.getInventory().setResult(null);
+                return;
+            }
+
+            String baseName = "";
+            String tierSuffix = "";
+            if (requiredTier == 2)
+                tierSuffix = " T2";
+            else if (requiredTier == 3)
+                tierSuffix = " T3";
+
+            if (resultMeta.getPersistentDataContainer().has(keys.HEALTH_TOTEM, PersistentDataType.STRING) ||
+                    resultMeta.getPersistentDataContainer().has(keys.HEALTH_TOTEM_TIER2, PersistentDataType.STRING) ||
+                    resultMeta.getPersistentDataContainer().has(keys.HEALTH_TOTEM_TIER3, PersistentDataType.STRING)) {
+                baseName = "Health Totem" + tierSuffix;
+            } else if (resultMeta.getPersistentDataContainer().has(keys.STRENGHT_TOTEM, PersistentDataType.STRING) ||
+                    resultMeta.getPersistentDataContainer().has(keys.STRENGTH_TOTEM_TIER2, PersistentDataType.STRING) ||
+                    resultMeta.getPersistentDataContainer().has(keys.STRENGTH_TOTEM_TIER3, PersistentDataType.STRING)) {
+                baseName = "Strenght Totem" + tierSuffix;
+            } else if (resultMeta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM,
+                    PersistentDataType.STRING) ||
+                    resultMeta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM_TIER2,
+                            PersistentDataType.STRING)
+                    ||
+                    resultMeta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM_TIER3,
+                            PersistentDataType.STRING)) {
+                baseName = "Fire Resistance Totem" + tierSuffix;
+            } else if (resultMeta.getPersistentDataContainer().has(keys.HASTE_TOTEM, PersistentDataType.STRING) ||
+                    resultMeta.getPersistentDataContainer().has(keys.HASTE_TOTEM_TIER2, PersistentDataType.STRING) ||
+                    resultMeta.getPersistentDataContainer().has(keys.HASTE_TOTEM_TIER3, PersistentDataType.STRING)) {
+                baseName = "Haste Totem" + tierSuffix;
             }
 
             if (!baseName.isEmpty()) {
+                String finalPlayerName = resultMeta.getPersistentDataContainer().get(keys.PLAYER_HEAD,
+                        PersistentDataType.STRING);
+
                 for (ItemStack item : e.getInventory().getMatrix()) {
                     if (item != null && item.getType() == Material.PLAYER_HEAD && item.hasItemMeta()) {
                         ItemMeta headMeta = item.getItemMeta();
-                        String playerName = headMeta.getPersistentDataContainer().get(keys.PLAYER_HEAD,
+                        String headOwner = headMeta.getPersistentDataContainer().get(keys.PLAYER_HEAD,
                                 PersistentDataType.STRING);
 
-                        if (playerName == null && headMeta instanceof SkullMeta) {
+                        if (headOwner == null && headMeta instanceof SkullMeta) {
                             SkullMeta skull = (SkullMeta) headMeta;
                             if (skull.getOwningPlayer() != null) {
-                                playerName = skull.getOwningPlayer().getName();
+                                headOwner = skull.getOwningPlayer().getName();
                             }
                         }
 
-                        if (playerName != null) {
-                            resultMeta.setDisplayName(ChatColor.YELLOW + playerName + "'s " + baseName);
-                            resultMeta.getPersistentDataContainer().set(keys.PLAYER_HEAD, PersistentDataType.STRING,
-                                    playerName);
-                            result.setItemMeta(resultMeta);
-                            e.getInventory().setResult(result);
+                        if (headOwner != null) {
+                            finalPlayerName = headOwner;
                             break;
                         }
                     }
+                }
+
+                if (finalPlayerName != null) {
+                    ChatColor color = getInstance()
+                            .getTotemColor(researchType.isEmpty() ? baseName : researchType);
+                    resultMeta.setDisplayName(ChatColor.YELLOW + finalPlayerName + "'s " + color + baseName);
+                    resultMeta.getPersistentDataContainer().set(keys.PLAYER_HEAD, PersistentDataType.STRING,
+                            finalPlayerName);
+                    result.setItemMeta(resultMeta);
+                    e.getInventory().setResult(result);
                 }
             }
         }
@@ -1531,9 +1742,10 @@ public class PlayerTotems extends JavaPlugin {
                 }
             }
         }
+
     }
 
-    private boolean isSpecialItem(ItemStack item) {
+    private static boolean isSpecialItem(ItemStack item) {
         if (item == null || item.getType() == Material.AIR || !item.hasItemMeta())
             return false;
         ItemMeta meta = item.getItemMeta();
@@ -1541,7 +1753,76 @@ public class PlayerTotems extends JavaPlugin {
                 meta.getPersistentDataContainer().has(keys.HEALTH_TOTEM, PersistentDataType.STRING) ||
                 meta.getPersistentDataContainer().has(keys.STRENGHT_TOTEM, PersistentDataType.STRING) ||
                 meta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM, PersistentDataType.STRING) ||
-                meta.getPersistentDataContainer().has(keys.HASTE_TOTEM, PersistentDataType.STRING) ||
-                meta.getPersistentDataContainer().has(keys.HEART_OF_THE_WARDEN, PersistentDataType.STRING);
+                meta.getPersistentDataContainer().has(keys.HASTE_TOTEM, PersistentDataType.STRING)
+                || meta.getPersistentDataContainer().has(keys.HEALTH_TOTEM_TIER2, PersistentDataType.STRING)
+                || meta.getPersistentDataContainer().has(keys.STRENGTH_TOTEM_TIER2, PersistentDataType.STRING)
+                || meta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM_TIER2, PersistentDataType.STRING)
+                || meta.getPersistentDataContainer().has(keys.HASTE_TOTEM_TIER2, PersistentDataType.STRING)
+                || meta.getPersistentDataContainer().has(keys.HEALTH_TOTEM_TIER3, PersistentDataType.STRING)
+                || meta.getPersistentDataContainer().has(keys.STRENGTH_TOTEM_TIER3, PersistentDataType.STRING)
+                || meta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM_TIER3, PersistentDataType.STRING)
+                || meta.getPersistentDataContainer().has(keys.HASTE_TOTEM_TIER3, PersistentDataType.STRING);
+    }
+
+    public static class OnItemUse implements Listener {
+        @EventHandler
+        public void onUse(PlayerInteractEvent e) {
+            if (e.getItem() == null)
+                return;
+            ItemStack item = e.getItem();
+            ItemMeta meta = item.getItemMeta();
+            Player player = e.getPlayer();
+            if (meta == null)
+                return;
+            if (meta.getPersistentDataContainer().has(keys.HEALTH_TOTEM, PersistentDataType.STRING)) {
+                e.setCancelled(true);
+            } else if (meta.getPersistentDataContainer().has(keys.STRENGHT_TOTEM, PersistentDataType.STRING)) {
+                e.setCancelled(true);
+            } else if (meta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM, PersistentDataType.STRING)) {
+                e.setCancelled(true);
+            } else if (meta.getPersistentDataContainer().has(keys.HASTE_TOTEM, PersistentDataType.STRING)) {
+                e.setCancelled(true);
+            } else if (meta.getPersistentDataContainer().has(keys.HEALTH_TOTEM_TIER2, PersistentDataType.STRING)) {
+
+            } else if (meta.getPersistentDataContainer().has(keys.STRENGTH_TOTEM_TIER2, PersistentDataType.STRING)) {
+
+            } else if (meta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM_TIER2,
+                    PersistentDataType.STRING)) {
+
+            } else if (meta.getPersistentDataContainer().has(keys.HASTE_TOTEM_TIER2, PersistentDataType.STRING)) {
+
+            } else if (meta.getPersistentDataContainer().has(keys.HEALTH_TOTEM_TIER3, PersistentDataType.STRING)) {
+
+            } else if (meta.getPersistentDataContainer().has(keys.STRENGTH_TOTEM_TIER3, PersistentDataType.STRING)) {
+
+            } else if (meta.getPersistentDataContainer().has(keys.FIRE_RESISTANCE_TOTEM_TIER3,
+                    PersistentDataType.STRING)) {
+
+            } else if (meta.getPersistentDataContainer().has(keys.HASTE_TOTEM_TIER3, PersistentDataType.STRING)) {
+
+            }
+        }
+    }
+
+    public static class OnTotemPop implements Listener {
+        @EventHandler
+        public void onTotemUse(EntityResurrectEvent e) {
+            if (!(e.getEntity() instanceof Player player))
+                return;
+
+            ItemStack main = player.getInventory().getItemInMainHand();
+            ItemStack off = player.getInventory().getItemInOffHand();
+
+            ItemStack item = null;
+
+            if (main != null && main.getType() == Material.TOTEM_OF_UNDYING && PlayerTotems.isSpecialItem(main)) {
+                item = main;
+            } else if (off != null && off.getType() == Material.TOTEM_OF_UNDYING && PlayerTotems.isSpecialItem(off)) {
+                item = off;
+            }
+
+            if (item == null)
+                return;
+        }
     }
 }
