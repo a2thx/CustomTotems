@@ -37,7 +37,7 @@ research:
       playtime: 260 #in minutes
     haste:
       xp:
-      playtime: 280 #in minutes
+      playtime: 240 #in minutes
   tier3:
     global:
       xp:
